@@ -19,13 +19,12 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', DEVICE)
 
 NUM_VOCAB, MAX_SEQ_LEN = 5000, 5
-BATCH_SIZE, LR, EPOCHS = 32, 1e-3, 30
+BATCH_SIZE, LR, EPOCHS, WEIGHT_DECAY, DROPOUT = 32, 1e-3, 50, 1e-5, 0.5
 from torch.utils.data import Subset
 dataset   = PygGraphPropPredDataset(name='ogbg-code2')
 split_idx = dataset.get_idx_split()
 
 vocab2idx, idx2vocab = get_vocab_mapping([dataset[i].y for i in split_idx['train']], NUM_VOCAB)
-
 
 def transform_fn(data):
     data2 = encode_y_to_arr(augment_edge(data), vocab2idx, MAX_SEQ_LEN)
@@ -46,7 +45,6 @@ print(f'num_nodetypes: {num_nodetypes}, num_nodeattributes: {num_nodeattributes}
 node_encoder = ASTNodeEncoder(300, num_nodetypes, num_nodeattributes, max_depth=20)
 
 model = GCN(len(idx2vocab), MAX_SEQ_LEN, node_encoder, drop_ratio=0.6).to(DEVICE)
-model.load_state_dict(torch.load('best_model.pt'))  # 이 줄 추가
 optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-5)
 criterion = nn.CrossEntropyLoss()
 evaluator = Evaluator('ogbg-code2')
@@ -78,7 +76,7 @@ def evaluate(loader):
     return evaluator.eval({'seq_ref': refs, 'seq_pred': preds})['F1']
  
 best = 0.0
-for epoch in range(31, 61):
+for epoch in range(1, EPOCHS + 1):
     loss = train(train_loader)
     f1   = evaluate(val_loader)
     if f1 > best:
