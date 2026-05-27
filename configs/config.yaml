@@ -20,6 +20,7 @@ train:
   num_workers: 4
   num_vocab: 5000
   emb_dim : 300
+  max_depth : 20
 
 cuda:
   cuda_number: 7
