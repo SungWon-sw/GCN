@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from centroid import get_centroid_tree
+from utils_centroid import get_centroid_tree
 
 class ASTNodeEncoder(torch.nn.Module):
     """
