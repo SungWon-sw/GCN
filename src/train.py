@@ -15,7 +15,7 @@ def _patched_load(*args, **kwargs):
 torch.load = _patched_load
 
 
-def load_config(config_path="configs/config.yaml"):
+def load_config(config_path="../configs/config.yaml"):
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
@@ -69,7 +69,7 @@ def main():
 
     model = GCN(
         num_tasks=len(idx2vocab), 
-        max_seq_len=cfg['data']['max_seq_len'], 
+        max_seq_len=cfg['train']['max_seq_len'], 
         node_encoder=node_encoder, 
         drop_ratio=cfg['model']['drop_ratio']
     ).to(device)

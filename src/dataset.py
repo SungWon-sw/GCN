@@ -18,12 +18,12 @@ def build_loaders(cfg):
     # 2. 훈련 데이터를 바탕으로 Vocab 매핑 생성
     vocab2idx, idx2vocab = get_vocab_mapping(
         [dataset[i].y for i in split_idx['train']], 
-        cfg['data']['num_vocab']
+        cfg['train']['num_vocab']
     )
 
     # 3. GNN 전처리 transform 함수 적용
     def transform_fn(data):
-        return encode_y_to_arr(augment_edge(data), vocab2idx, cfg['data']['max_seq_len'])
+        return encode_y_to_arr(augment_edge(data), vocab2idx, cfg['train']['max_seq_len'])
     
     dataset.transform = transform_fn
     dataset = convert_into_easy(dataset)
@@ -33,19 +33,19 @@ def build_loaders(cfg):
         Subset(dataset, split_idx['train']), 
         batch_size=cfg['train']['batch_size'], 
         shuffle=True, 
-        num_workers=cfg['data']['num_workers']
+        num_workers=cfg['train']['num_workers']
     )
     val_loader = DataLoader(
         Subset(dataset, split_idx['valid']), 
         batch_size=cfg['train']['batch_size'], 
         shuffle=False, 
-        num_workers=cfg['data']['num_workers']
+        num_workers=cfg['train']['num_workers']
     )
     test_loader = DataLoader(
         Subset(dataset, split_idx['test']),  
         batch_size=cfg['train']['batch_size'], 
         shuffle=False, 
-        num_workers=cfg['data']['num_workers']
+        num_workers=cfg['train']['num_workers']
     )
 
     # 5. 모델 입력에 필요한 메타데이터 계산
