@@ -52,7 +52,8 @@ def evaluate(model, loader, idx2vocab, evaluator, device):
 
 def main():
     cfg = load_config()
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    cuda_num = cfg['cuda']['cuda_number']  # config에서 번호 직접 추출 (예: 7)
+    device = torch.device(f'cuda:{cuda_num}')
     print('Using device:', device)
 
     # 1. 데이터 파트: 복잡한 로직은 src/dataset.py가 처리하고 로더와 메타데이터만 받음
@@ -68,10 +69,9 @@ def main():
     )
 
     model = GCN(
-        num_tasks=len(idx2vocab), 
-        max_seq_len=cfg['train']['max_seq_len'], 
+        cfg=cfg, 
         node_encoder=node_encoder, 
-        drop_ratio=cfg['train']['drop_ratio']
+        num_tasks=len(idx2vocab)
     ).to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['train']['lr'], weight_decay=cfg['train']['weight_decay'])

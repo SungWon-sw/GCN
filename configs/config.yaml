@@ -11,16 +11,17 @@ model:
 
 # 학습 관련
 train:
-  weight_decay: 1e-5
+  weight_decay: 0.00001
   epochs: 50
   batch_size: 32
   max_seq_len : 5
   batch_size: 32
-  lr: 1e-3
+  lr: 0.001
   num_workers: 4
   num_vocab: 5000
   emb_dim : 300
   max_depth : 20
-
+  drop_ratio : 0.5
+  
 cuda:
   cuda_number: 7
