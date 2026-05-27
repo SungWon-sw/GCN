@@ -142,7 +142,7 @@ class CustomEasyDataset(InMemoryDataset):
         # collate 함수를 통해 리스트를 PyG 데이터셋 포맷으로 압축합니다.
         self.data, self.slices = self.collate(data_list)
 
-def convert_into_easy(dataset, log_interval=10000):
+def convert_into_easy(dataset):
     new_data_list = []
 
     for idx in range(len(dataset)):
@@ -152,8 +152,5 @@ def convert_into_easy(dataset, log_interval=10000):
         ret = traverse_ast(data)
         tree = centroid(ret)
         new_data_list.append(data_put_edge(data, tree))
-
-        if (idx + 1) % log_interval == 0:
-            print(f'  Converting {idx+1}/{len(dataset)}', flush=True)
 
     return CustomEasyDataset(new_data_list)

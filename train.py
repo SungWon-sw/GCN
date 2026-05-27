@@ -45,13 +45,14 @@ print(f'num_nodetypes: {num_nodetypes}, num_nodeattributes: {num_nodeattributes}
 
 node_encoder = ASTNodeEncoder(300, num_nodetypes, num_nodeattributes, max_depth=20)
 
-model     = GCN(len(idx2vocab), MAX_SEQ_LEN, node_encoder).to(DEVICE)
-optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+model = GCN(len(idx2vocab), MAX_SEQ_LEN, node_encoder, drop_ratio=0.6).to(DEVICE)
+model.load_state_dict(torch.load('best_model.pt'))  # 이 줄 추가
+optimizer = torch.optim.Adam(model.parameters(), lr=LR, weight_decay=1e-5)
 criterion = nn.CrossEntropyLoss()
 evaluator = Evaluator('ogbg-code2')
 print(f'Parameters: {sum(p.numel() for p in model.parameters()):,}')
 
-def train(loader, log_interval=500):
+def train(loader):
     model.train()
     total_loss = 0.0
     for i, data in enumerate(loader):
@@ -61,9 +62,6 @@ def train(loader, log_interval=500):
         loss  = sum(criterion(pred, label[:,i]) for i, pred in enumerate(model(data)))
         loss.backward(); optimizer.step()
         total_loss += loss.item()
-
-        if (i + 1) % log_interval == 0:
-            print(f'  Batch {i+1}/{len(loader)} | Loss: {total_loss/(i+1):.4f}', flush=True)
 
     return total_loss / len(loader)
 
@@ -80,7 +78,7 @@ def evaluate(loader):
     return evaluator.eval({'seq_ref': refs, 'seq_pred': preds})['F1']
  
 best = 0.0
-for epoch in range(1, EPOCHS+1):
+for epoch in range(31, 61):
     loss = train(train_loader)
     f1   = evaluate(val_loader)
     if f1 > best:
