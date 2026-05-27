@@ -1,6 +1,6 @@
 # 디렉토리 및 데이터 관련
 data:
-  dataset_name: "ogbg_code2"
+  dataset_name: "ogbg-code2"
   dir: "./"
 
 # 모델 아키텍처 관련
@@ -14,10 +14,12 @@ train:
   weight_decay: 1e-5
   epochs: 50
   batch_size: 32
-  num_vocab, max_seq_len = 5000, 5
+  max_seq_len : 5
   batch_size: 32
   lr: 1e-3
   num_workers: 4
+  num_vocab: 5000
+  emb_dim : 300
 
 cuda:
   cuda_number: 7

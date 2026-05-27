@@ -15,7 +15,7 @@ def _patched_load(*args, **kwargs):
 torch.load = _patched_load
 
 
-def load_config(config_path="configs/config.yaml"):
+def load_config(config_path="../configs/config.yaml"):
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
@@ -69,7 +69,7 @@ def main():
 
     model = GCN(
         num_tasks=len(idx2vocab), 
-        max_seq_len=cfg['data']['max_seq_len'], 
+        max_seq_len=cfg['train']['max_seq_len'], 
         node_encoder=node_encoder, 
         drop_ratio=cfg['model']['drop_ratio']
     ).to(device)
@@ -87,12 +87,12 @@ def main():
         
         if val_f1 > best_f1:
             best_f1 = val_f1
-            torch.save(model.state_dict(), cfg['train']['model_save_path'])
+            torch.save(model.state_dict(), 'best_model.pt')
             
         print(f'Epoch {epoch:03d} | Loss: {loss:.4f} | Val F1: {val_f1:.4f} | Best: {best_f1:.4f}')
 
     # 4. 최종 테스트 평가
-    model.load_state_dict(torch.load(cfg['train']['model_save_path']))
+    model.load_state_dict(torch.load('best_model.pt'))
     test_f1 = evaluate(model, test_loader, idx2vocab, evaluator, device)
     print(f'==> Final Test F1: {test_f1:.4f}')
 
