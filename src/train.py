@@ -61,17 +61,17 @@ def main():
 
     # 2. 모델 파트
     node_encoder = ASTNodeEncoder(
-        cfg['model']['emb_dim'], 
+        cfg['train']['emb_dim'], 
         num_nodetypes, 
         num_nodeattributes, 
-        max_depth=cfg['model']['max_depth']
+        max_depth=cfg['train']['max_depth']
     )
 
     model = GCN(
         num_tasks=len(idx2vocab), 
         max_seq_len=cfg['train']['max_seq_len'], 
         node_encoder=node_encoder, 
-        drop_ratio=cfg['model']['drop_ratio']
+        drop_ratio=cfg['train']['drop_ratio']
     ).to(device)
     
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['train']['lr'], weight_decay=cfg['train']['weight_decay'])
