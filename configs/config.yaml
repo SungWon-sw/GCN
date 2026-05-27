@@ -18,6 +18,8 @@ train:
   batch_size: 32
   lr: 1e-3
   num_workers: 4
+  num_vocab: 5000
+  emb_dim : 300
 
 cuda:
   cuda_number: 7
