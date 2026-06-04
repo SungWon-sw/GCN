@@ -1,211 +1,156 @@
-from collections import Counter
-
-import numpy as np
 import torch
-from loguru import logger
+import numpy as np
 
+from utils_centroid import get_centroid_tree
 
 class ASTNodeEncoder(torch.nn.Module):
     """
-    Input:
-        x: default node feature. the first and second column represents node type and node attributes.
-        depth: The depth of the node in the AST.
-
-    Output:
-        emb_dim-dimensional vector
-
+    x[:, 0] : node type index
+    x[:, 1] : node attribute index
+    depth    : depth of the node in AST (별도 텐서)
     """
-
     def __init__(self, emb_dim, num_nodetypes, num_nodeattributes, max_depth):
-        super(ASTNodeEncoder, self).__init__()
-
+        super().__init__()
         self.max_depth = max_depth
-
-        self.type_encoder = torch.nn.Embedding(num_nodetypes, emb_dim)
+        self.type_encoder      = torch.nn.Embedding(num_nodetypes,      emb_dim)
         self.attribute_encoder = torch.nn.Embedding(num_nodeattributes, emb_dim)
-        self.depth_encoder = torch.nn.Embedding(self.max_depth + 1, emb_dim)
+        self.depth_encoder     = torch.nn.Embedding(max_depth + 1,      emb_dim)
 
     def forward(self, x, depth):
+        depth = depth.clone()
         depth[depth > self.max_depth] = self.max_depth
         return self.type_encoder(x[:, 0]) + self.attribute_encoder(x[:, 1]) + self.depth_encoder(depth)
 
-
 def get_vocab_mapping(seq_list, num_vocab):
-    """
-    Input:
-        seq_list: a list of sequences
-        num_vocab: vocabulary size
-    Output:
-        vocab2idx:
-            A dictionary that maps vocabulary into integer index.
-            Additioanlly, we also index '__UNK__' and '__EOS__'
-            '__UNK__' : out-of-vocabulary term
-            '__EOS__' : end-of-sentence
-
-        idx2vocab:
-            A list that maps idx to actual vocabulary.
-
-    """
-
-    vocab_cnt = {}
-    vocab_list = []
+    vocab_cnt, vocab_list = {}, []
     for seq in seq_list:
         for w in seq:
-            if w in vocab_cnt:
-                vocab_cnt[w] += 1
-            else:
-                vocab_cnt[w] = 1
-                vocab_list.append(w)
+            if w in vocab_cnt: vocab_cnt[w] += 1
+            else: vocab_cnt[w] = 1; vocab_list.append(w)
 
     cnt_list = np.array([vocab_cnt[w] for w in vocab_list])
-    topvocab = np.argsort(-cnt_list, kind="stable")[:num_vocab]
+    topvocab = np.argsort(-cnt_list, kind='stable')[:num_vocab]
+    print(f'Vocab coverage: {float(np.sum(cnt_list[topvocab]))/np.sum(cnt_list):.4f}')
 
-    logger.info("Coverage of top {} vocabulary: {:.4f}", num_vocab, float(np.sum(cnt_list[topvocab])) / np.sum(cnt_list))
-
-    vocab2idx = {vocab_list[vocab_idx]: idx for idx, vocab_idx in enumerate(topvocab)}
-    idx2vocab = [vocab_list[vocab_idx] for vocab_idx in topvocab]
-
-    # logger.info(topvocab)
-    # logger.info([vocab_list[v] for v in topvocab[:10]])
-    # logger.info([vocab_list[v] for v in topvocab[-10:]])
-
-    vocab2idx["__UNK__"] = num_vocab
-    idx2vocab.append("__UNK__")
-
-    vocab2idx["__EOS__"] = num_vocab + 1
-    idx2vocab.append("__EOS__")
-
-    # test the correspondence between vocab2idx and idx2vocab
-    for idx, vocab in enumerate(idx2vocab):
-        assert idx == vocab2idx[vocab]
-
-    # test that the idx of '__EOS__' is len(idx2vocab) - 1.
-    # This fact will be used in decode_arr_to_seq, when finding __EOS__
-    assert vocab2idx["__EOS__"] == len(idx2vocab) - 1
-
+    vocab2idx = {vocab_list[i]: idx for idx, i in enumerate(topvocab)}
+    idx2vocab = [vocab_list[i] for i in topvocab]
+    vocab2idx['__UNK__'] = num_vocab;   idx2vocab.append('__UNK__')
+    vocab2idx['__EOS__'] = num_vocab+1; idx2vocab.append('__EOS__')
     return vocab2idx, idx2vocab
 
-
-def augment_edge(data):
-    """
-    Input:
-        data: PyG data object
-    Output:
-        data (edges are augmented in the following ways):
-            data.edge_index: Added next-token edge. The inverse edges were also added.
-            data.edge_attr (torch.Long):
-                data.edge_attr[:,0]: whether it is AST edge (0) for next-token edge (1)
-                data.edge_attr[:,1]: whether it is original direction (0) or inverse direction (1)
-    """
-
-    ##### AST edge
-    edge_index_ast = data.edge_index
-    edge_attr_ast = torch.zeros((edge_index_ast.size(1), 2))
-
-    ##### Inverse AST edge
-    edge_index_ast_inverse = torch.stack([edge_index_ast[1], edge_index_ast[0]], dim=0)
-    edge_attr_ast_inverse = torch.cat(
-        [torch.zeros(edge_index_ast_inverse.size(1), 1), torch.ones(edge_index_ast_inverse.size(1), 1)], dim=1
-    )
-
-    ##### Next-token edge
-
-    ## Obtain attributed nodes and get their indices in dfs order
-    # attributed_node_idx = torch.where(data.node_is_attributed.view(-1,) == 1)[0]
-    # attributed_node_idx_in_dfs_order = attributed_node_idx[torch.argsort(data.node_dfs_order[attributed_node_idx].view(-1,))]
-
-    ## Since the nodes are already sorted in dfs ordering in our case, we can just do the following.
-    attributed_node_idx_in_dfs_order = torch.where(
-        data.node_is_attributed.view(
-            -1,
-        )
-        == 1
-    )[0]
-
-    ## build next token edge
-    # Given: attributed_node_idx_in_dfs_order
-    #        [1, 3, 4, 5, 8, 9, 12]
-    # Output:
-    #    [[1, 3, 4, 5, 8, 9]
-    #     [3, 4, 5, 8, 9, 12]
-    edge_index_nextoken = torch.stack([attributed_node_idx_in_dfs_order[:-1], attributed_node_idx_in_dfs_order[1:]], dim=0)
-    edge_attr_nextoken = torch.cat([torch.ones(edge_index_nextoken.size(1), 1), torch.zeros(edge_index_nextoken.size(1), 1)], dim=1)
-
-    ##### Inverse next-token edge
-    edge_index_nextoken_inverse = torch.stack([edge_index_nextoken[1], edge_index_nextoken[0]], dim=0)
-    edge_attr_nextoken_inverse = torch.ones((edge_index_nextoken.size(1), 2))
-
-    data.edge_index = torch.cat([edge_index_ast, edge_index_ast_inverse, edge_index_nextoken, edge_index_nextoken_inverse], dim=1)
-    data.edge_attr = torch.cat([edge_attr_ast, edge_attr_ast_inverse, edge_attr_nextoken, edge_attr_nextoken_inverse], dim=0)
-
-    return data
-
-
 def encode_y_to_arr(data, vocab2idx, max_seq_len):
-    """
-    Input:
-        data: PyG graph object
-        output: add y_arr to data
-    """
-
-    # PyG >= 1.5.0
     seq = data.y
-
-    # PyG = 1.4.3
-    # seq = data.y[0]
-
-    data.y_arr = encode_seq_to_arr(seq, vocab2idx, max_seq_len)
-
+    augmented = seq[:max_seq_len] + ['__EOS__'] * max(0, max_seq_len - len(seq))
+    data.y_arr = torch.tensor(
+        [[vocab2idx.get(w, vocab2idx['__UNK__']) for w in augmented]], dtype=torch.long
+    )
     return data
-
-
-def encode_seq_to_arr(seq, vocab2idx, max_seq_len):
-    """
-    Input:
-        seq: A list of words
-        output: add y_arr (torch.Tensor)
-    """
-
-    augmented_seq = seq[:max_seq_len] + ["__EOS__"] * max(0, max_seq_len - len(seq))
-    return torch.tensor([[vocab2idx[w] if w in vocab2idx else vocab2idx["__UNK__"] for w in augmented_seq]], dtype=torch.long)
-
 
 def decode_arr_to_seq(arr, idx2vocab):
-    """
-    Input: torch 1d array: y_arr
-    Output: a sequence of words.
-    """
+    eos_pos = torch.nonzero(arr == len(idx2vocab)-1, as_tuple=False)
+    arr = arr[:torch.min(eos_pos).item()] if len(eos_pos) > 0 else arr
+    return [idx2vocab[i.item()] for i in arr]
 
-    eos_idx_list = (arr == len(idx2vocab) - 1).nonzero()  # find the position of __EOS__ (the last vocab in idx2vocab)
-    if len(eos_idx_list) > 0:
-        clippted_arr = arr[: torch.min(eos_idx_list)]  # find the smallest __EOS__
+def augment_edge(data):
+    ei = data.edge_index
+    ea = torch.zeros(ei.size(1), 2)
+    ei_inv = torch.stack([ei[1], ei[0]], dim=0)
+    ea_inv = torch.cat([torch.zeros(ei_inv.size(1),1), torch.ones(ei_inv.size(1),1)], dim=1)
+
+    data.edge_index = torch.cat([ei, ei_inv], dim=1)
+    data.edge_attr  = torch.cat([ea, ea_inv], dim=0)
+    return data
+
+def augment_edge_with_leaf_edge(data):
+    ei = data.edge_index
+    ea = torch.zeros(ei.size(1), 2)
+    ei_inv = torch.stack([ei[1], ei[0]], dim=0)
+    ea_inv = torch.cat([torch.zeros(ei_inv.size(1),1), torch.ones(ei_inv.size(1),1)], dim=1)
+
+    attr_nodes = torch.where(data.node_is_attributed.view(-1) == 1)[0]
+    if len(attr_nodes) > 1:
+        ei_next = torch.stack([attr_nodes[:-1], attr_nodes[1:]], dim=0)
+        ea_next = torch.cat([torch.ones(ei_next.size(1),1), torch.zeros(ei_next.size(1),1)], dim=1)
+        ei_next_inv = torch.stack([ei_next[1], ei_next[0]], dim=0)
+        ea_next_inv = torch.ones(ei_next.size(1), 2)
+        data.edge_index = torch.cat([ei, ei_inv, ei_next, ei_next_inv], dim=1)
+        data.edge_attr  = torch.cat([ea, ea_inv, ea_next, ea_next_inv], dim=0)
     else:
-        clippted_arr = arr
+        data.edge_index = torch.cat([ei, ei_inv], dim=1)
+        data.edge_attr  = torch.cat([ea, ea_inv], dim=0)
+    return data
+from torch_geometric.data import InMemoryDataset
 
-    return list(map(lambda x: idx2vocab[x], clippted_arr.cpu()))
+def centroid(tree_data):
+    n = len(tree_data)
+    edge_data = []
+
+    for i in range(n):
+        edge_data.append([i,tree_data[i]])
+
+    tree_ans = get_centroid_tree(n, edge_data)
+    return tree_ans
+
+def data_put_edge(data, tree):
+    col, row = [], []
+
+    for i in tree: col.append(i[0]); row.append(i[1])
+
+    col = torch.tensor(col, dtype=torch.long)
+    row = torch.tensor(row, dtype=torch.long)
+
+    edge_attr = torch.ones(len(col),2)
+    edge_index = torch.stack([col, row], dim=0)
+    edge_attr_inv = torch.ones(len(col),2)
+    edge_index_inv = torch.stack([row, col], dim=0)
+    data.edge_index = torch.cat([data.edge_index,edge_index_inv,edge_index], dim=1)
+    data.edge_attr = torch.cat([data.edge_attr,edge_attr_inv,edge_attr], dim=0)
+
+    return data
 
 
-def test():
-    seq_list = [["a", "b"], ["a", "b", "c", "df", "f", "2edea", "a"], ["eraea", "a", "c"], ["d"], ["4rq4f", "f", "a", "a", "g"]]
-    vocab2idx, idx2vocab = get_vocab_mapping(seq_list, 4)
-    logger.debug(vocab2idx)
-    logger.debug(idx2vocab)
-    assert len(vocab2idx) == len(idx2vocab)
+def traverse_ast(data):
+    ret = list(0 for _ in range(data.num_nodes))
+    
+    visited = [False] * data.num_nodes
+    stack = [(0, 0)] 
+    adj = [[] for _ in range(data.num_nodes)]
+    
+    # [수정 구간] 텐서를 넘파이 배열로 변환 후, C-level 속도로 루프 수행
+    edges = data.edge_index.cpu().numpy()
+    for i in range(edges.shape[1]):
+        src = edges[0, i]
+        dst = edges[1, i]
+        adj[src].append(dst)
 
-    for vocab, idx in vocab2idx.items():
-        assert idx2vocab[idx] == vocab
+    while stack:
+        curr, prev = stack.pop()
+        visited[curr] = True
 
-    for seq in seq_list:
-        logger.debug(seq)
-        arr = encode_seq_to_arr(seq, vocab2idx, max_seq_len=4)[0]
-        # Test the effect of predicting __EOS__
-        # arr[2] = vocab2idx['__EOS__']
-        logger.debug(arr)
-        seq_dec = decode_arr_to_seq(arr, idx2vocab)
+        ret[curr] = prev
+            
+        for neighbor in reversed(adj[curr]):
+            if not visited[neighbor]:
+                stack.append((neighbor, curr))
 
-        logger.debug(arr)
-        logger.debug(seq_dec)
+    return ret
 
 
-if __name__ == "__main__":
-    test()
+class CustomEasyDataset(InMemoryDataset):
+    def __init__(self, data_list):
+        super().__init__(None)
+        # collate 함수를 통해 리스트를 PyG 데이터셋 포맷으로 압축합니다.
+        self.data, self.slices = self.collate(data_list)
+
+def convert_into_easy(dataset):
+    new_data_list = []
+
+    for idx in range(len(dataset)):
+        tmp_data = dataset[idx]
+        data = tmp_data.clone()
+        
+        ret = traverse_ast(data)
+        tree = centroid(ret)
+        new_data_list.append(data_put_edge(data, tree))
+
+    return CustomEasyDataset(new_data_list)

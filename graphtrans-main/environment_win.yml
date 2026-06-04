@@ -1,0 +1,35 @@
+name: graphtrans
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pytorch=1.7.1
+  - torchvision
+  - torchaudio
+  - cudatoolkit=10.2
+  - numpy
+  - pandas
+  - scikit-learn
+  - scipy
+  - matplotlib
+  - tqdm
+  - pyyaml
+  - networkx
+  - pip
+  - pip:
+    - ogb==1.2.6
+    - torch-scatter
+    - torch-sparse
+    - torch-cluster
+    - torch-spline-conv
+    - torch-geometric==1.6.3
+    - wandb
+    - loguru
+    - configargparse
+    - ase
+    - rdflib
+    - googledrivedownloader
+    - outdated
+    - littleutils
