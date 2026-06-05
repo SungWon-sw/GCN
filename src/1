@@ -1,0 +1,26 @@
+Using device: cuda:3
+Vocab coverage: 0.9026
+num_nodetypes: 97, num_nodeattributes: 10030
+Parameters: 10,848,710
+Traceback (most recent call last):
+  File "train.py", line 101, in <module>
+    main()
+  File "train.py", line 85, in main
+    loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
+  File "train.py", line 26, in train_one_epoch
+    for data in loader:
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1317, in _next_data
+    self._shutdown_workers()
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1442, in _shutdown_workers
+    w.join(timeout=_utils.MP_STATUS_CHECK_INTERVAL)
+  File "/usr/lib/python3.8/multiprocessing/process.py", line 149, in join
+    res = self._popen.wait(timeout)
+  File "/usr/lib/python3.8/multiprocessing/popen_fork.py", line 44, in wait
+    if not wait([self.sentinel], timeout):
+  File "/usr/lib/python3.8/multiprocessing/connection.py", line 931, in wait
+    ready = selector.select(timeout)
+  File "/usr/lib/python3.8/selectors.py", line 415, in select
+    fd_event_list = self._selector.poll(timeout)
+KeyboardInterrupt

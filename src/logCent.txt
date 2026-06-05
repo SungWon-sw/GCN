@@ -1,0 +1,10 @@
+Using device: cuda:3
+Vocab coverage: 0.9026
+Traceback (most recent call last):
+  File "train.py", line 101, in <module>
+    main()
+  File "train.py", line 60, in main
+    train_loader, val_loader, test_loader, idx2vocab, num_nodetypes, num_nodeattributes = build_loaders(cfg)
+  File "/src/gs25048/simR/src/dataset.py", line 29, in build_loaders
+    dataset, depth_data = convert_into_easy(dataset)
+ValueError: too many values to unpack (expected 2)
