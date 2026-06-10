@@ -5,3 +5,4 @@ __pycache__/
 dataset/
 *.pyc
 *.txt
+best_model.pt
