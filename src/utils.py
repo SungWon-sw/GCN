@@ -91,25 +91,18 @@ def centroid(tree_data):
     tree_ans = get_centroid_tree(n, edge_data)
     return tree_ans
 
-def data_put_edge(data, tree, dep):
+def data_put_edge(data, tree):
     col, row = [], []
 
-    for i in tree: 
-        copy_i = i;
-        if dep[i[0]] > dep[i[1]] :
-            tmp = copy_i[0]
-            copy_i[0] = i[1]
-            copy_i[1] = i[0]
-
-        col.append(i[0]); row.append(i[1])
+    for i in tree: col.append(i[0]); row.append(i[1])
 
     col = torch.tensor(col, dtype=torch.long)
     row = torch.tensor(row, dtype=torch.long)
 
     edge_attr = torch.ones(len(col),2)
     edge_index = torch.stack([col, row], dim=0)
+    edge_attr_inv = torch.ones(len(col),2)
     edge_index_inv = torch.stack([row, col], dim=0)
-    edge_attr_inv = torch.cat([torch.ones(edge_index_inv.size(1),1), torch.zeros(edge_index_inv.size(1),1)], dim=1)
     data.edge_index = torch.cat([data.edge_index,edge_index_inv,edge_index], dim=1)
     data.edge_attr = torch.cat([data.edge_attr,edge_attr_inv,edge_attr], dim=0)
 
@@ -122,8 +115,8 @@ def traverse_ast(data):
     visited = [False] * data.num_nodes
     stack = [(0, 0)] 
     adj = [[] for _ in range(data.num_nodes)]
-    dep = [0 for _ in range(data.num_nodes)]
-
+    
+    # [수정 구간] 텐서를 넘파이 배열로 변환 후, C-level 속도로 루프 수행
     edges = data.edge_index.cpu().numpy()
     for i in range(edges.shape[1]):
         src = edges[0, i]
@@ -134,14 +127,13 @@ def traverse_ast(data):
         curr, prev = stack.pop()
         visited[curr] = True
 
-        ret[curr] = prev    
-        dep[curr] = dep[prev] + 1
-
+        ret[curr] = prev
+            
         for neighbor in reversed(adj[curr]):
             if not visited[neighbor]:
                 stack.append((neighbor, curr))
 
-    return ret,dep
+    return ret
 
 
 class CustomEasyDataset(InMemoryDataset):
@@ -157,8 +149,8 @@ def convert_into_easy(dataset):
         tmp_data = dataset[idx]
         data = tmp_data.clone()
         
-        ret, dep = traverse_ast(data)
+        ret = traverse_ast(data)
         tree = centroid(ret)
-        new_data_list.append(data_put_edge(data, tree, dep))
+        new_data_list.append(data_put_edge(data, tree))
 
     return CustomEasyDataset(new_data_list)

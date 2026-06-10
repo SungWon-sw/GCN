@@ -15,7 +15,7 @@ def _patched_load(*args, **kwargs):
 torch.load = _patched_load
 
 
-def load_config(config_path="../configs/config.yaml"):
+def load_config(config_path="configs/config.yaml"):
     with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
@@ -46,7 +46,7 @@ def evaluate(model, loader, idx2vocab, evaluator, device):
         
         for i in range(pred_arr.size(0)):
             preds.append(decode_arr_to_seq(pred_arr[i], idx2vocab))
-            refs.append(decode_arr_to_seq(data.y_arr[i].cpu(), idx2vocab))
+            refs.append(data.y[i])
     return evaluator.eval({'seq_ref': refs, 'seq_pred': preds})['F1']
 
 

@@ -21,7 +21,7 @@ train:
   num_vocab: 5000
   emb_dim : 300
   max_depth : 20
-  drop_ratio : 0.5
+  drop_ratio : 0.35
   
 cuda:
-  cuda_number: 7
+  cuda_number: 8
