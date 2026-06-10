@@ -6,3 +6,4 @@ dataset/
 *.pyc
 *.txt
 best_model.pt
+.conda/
