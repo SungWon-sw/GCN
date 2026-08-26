@@ -27,7 +27,7 @@ def get_centroid(edge, size, check, start):
     return cent
 
 def get_centroid_tree(n, edge):
-    s = [(0, 0)]; check = [0] * n; cent_tree = []
+    s = [(0, -1)]; check = [0] * n; cent_tree = []
     while s:
         node, prev = s.pop()
         size = get_size(n, edge, check, node)
@@ -46,27 +46,26 @@ def get_centroid_tree(n, edge):
 def get_vn_tree(n, edge):
     return get_centroid_tree(n, edge)
 
-def get_vn_connect(vn, bag):
+def get_vn_connect(n, m, bag):
     vn_connect = []
-    for i in vn:
-        for node in bag[i]:
+    for i in range(n, n+m):
+        for node in bag[i - n]:
             vn_connect.append((i, node))
     return vn_connect
 
 def op(n, edge):
-    bags, bag_tree = tree_decomposition(n, edges)
+    bags, bag_tree = tree_decomposition(n, edge)
     
     m = len(bags)
-    vn_tree = get_vn_tree(m, bag_tree)
-
-    vn = set()
+    adj_bag_tree = [[] for _ in range(m)]
     
-    for vn_edge in vn_tree:
-        vn_edge[0] += n
-        vn_edge[1] += n
-        vn.add(vc_edge[0])
-        vn.add(vc_edge[1])
+    for u, v in bag_tree:
+        adj_bag_tree[u].append(v)
+        adj_bag_tree[v].append(u)
+    
+    base_vn_tree = get_vn_tree(m, adj_bag_tree)
+    vn_edge = [(u + n, v + n) for u, v in base_vn_tree]
         
-    new_tree = edge + vn_tree + get_vn_connect(vn, bags)
+    new_tree = edge + vn_edge + get_vn_connect(n, m, bags)
     
     return (n+m, new_tree)
