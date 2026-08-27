@@ -33,7 +33,7 @@ def get_centroid_tree(n, edge):
         size = get_size(n, edge, check, node)
         cent = get_centroid(edge, size, check, node)
 
-        if prev: cent_tree.append((prev, cent))
+        if prev != -1: cent_tree.append((prev, cent))
 
         check[cent] = True
         for next in edge[cent]:
