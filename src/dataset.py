@@ -5,6 +5,7 @@ from ogb.graphproppred import PygGraphPropPredDataset
 
 # 유틸리티 함수 임포트
 from utils import get_vocab_mapping, encode_y_to_arr, augment_edge, convert_into_easy
+from utils_vn_connect import op
 
 def build_loaders(cfg):
     """
@@ -26,7 +27,7 @@ def build_loaders(cfg):
         return encode_y_to_arr(augment_edge(data), vocab2idx, cfg['train']['max_seq_len'])
     
     dataset.transform = transform_fn
-    dataset = convert_into_easy(dataset)
+    dataset = op(dataset)
 
     # 4. DataLoader 생성
     train_loader = DataLoader(

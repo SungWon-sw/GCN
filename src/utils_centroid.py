@@ -27,13 +27,13 @@ def get_centroid(edge, size, check, start):
     return cent
 
 def get_centroid_tree(n, edge):
-    s = [(0, 0)]; check = [0] * n; cent_tree = []
+    s = [(0, -1)]; check = [0] * n; cent_tree = []
     while s:
         node, prev = s.pop()
         size = get_size(n, edge, check, node)
         cent = get_centroid(edge, size, check, node)
 
-        if prev: cent_tree.append((prev, cent))
+        if prev != -1: cent_tree.append((prev, cent))
 
         check[cent] = True
         for next in edge[cent]:
