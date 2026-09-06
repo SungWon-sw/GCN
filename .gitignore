@@ -7,3 +7,4 @@ dataset/
 *.txt
 best_model.pt
 .conda/
+ogbg_ppa/

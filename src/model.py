@@ -23,8 +23,7 @@ import torch.nn.functional as F
 
 from torch_geometric.nn import MessagePassing, global_mean_pool
 from torch_geometric.utils import degree
-from torch_scatter import scatter
-
+from torch_geometric.utils import scatter
 
 class GCNConv(MessagePassing):
     """OGB-style GCN layer for the real AST graph (uses edge features)."""
@@ -33,20 +32,22 @@ class GCNConv(MessagePassing):
         super().__init__(aggr='add')
         self.linear       = nn.Linear(emb_dim, emb_dim)
         self.root_emb     = nn.Embedding(1, emb_dim)
-        self.edge_encoder = nn.Linear(2, emb_dim)
+        self.edge_encoder = nn.Linear(7, emb_dim)
 
     def forward(self, x, edge_index, edge_attr):
         x        = self.linear(x)
         edge_emb = self.edge_encoder(edge_attr.float())
 
-        row, _       = edge_index
-        deg          = degree(row, x.size(0), dtype=x.dtype)
+        row, col       = edge_index
+        deg          = degree(row, x.size(0), dtype=x.dtype) + 1
         deg_inv_sqrt = deg.pow(-0.5)
         deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0          # isolated node -> 0, not 1e9
-        norm = deg_inv_sqrt[edge_index[0]] * deg_inv_sqrt[edge_index[1]]
+        norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
         agg = self.propagate(edge_index, x=x, edge_attr=edge_emb, norm=norm)
-        return agg + F.relu(x + self.root_emb.weight) / deg.clamp(min=1).view(-1, 1)
+        root = F.relu(x + self.root_emb.weight) / deg.view(-1, 1)
+
+        return agg + root
 
     def message(self, x_j, edge_attr, norm):
         return norm.view(-1, 1) * F.relu(x_j + edge_attr)
@@ -81,7 +82,7 @@ class GCNConvVN(MessagePassing):
 
 
 class GCN(nn.Module):
-    def __init__(self, cfg, node_encoder, num_tasks=None):
+    def __init__(self, cfg, node_encoder, num_classes, num_tasks=None):
         super().__init__()
 
         train_cfg = cfg.get('train', {})
@@ -123,8 +124,7 @@ class GCN(nn.Module):
         self.subbns = nn.ModuleList(
             [nn.BatchNorm1d(emb_dim) for _ in range(n_vn_blocks * num_sublayers)])
 
-        self.pred_heads = nn.ModuleList(
-            [nn.Linear(emb_dim, num_tasks) for _ in range(max_seq_len)])
+        self.graph_pred_linear = nn.Linear(emb_dim, num_classes)
 
     # ----------------------------------------------------------------------
     def _propagate_vn(self, vn, vn_edge_index, block):
@@ -148,7 +148,7 @@ class GCN(nn.Module):
         vn = self.virtualnode_embedding(
             torch.zeros(num_vn, dtype=torch.long, device=data.x.device))      # [num_vn, D]
 
-        h = self.node_encoder(data.x, data.node_depth.view(-1))               # [N, D]
+        h = self.node_encoder(data.x)               # [N, D]
 
         for i in range(self.num_layers):
             h = h + vn[node2vn]                                              # inject hub state
@@ -165,5 +165,5 @@ class GCN(nn.Module):
                 vn     = vn + update
                 vn     = self._propagate_vn(vn, vn_edge_index, block=i)
 
-        h_graph = global_mean_pool(h, data.batch)                            # [B, D]
-        return [head(h_graph) for head in self.pred_heads]                   # list of [B, num_tasks]
+        h_graph = global_mean_pool(h, data.batch)
+        return self.graph_pred_linear(h_graph)                # list of [B, num_tasks]

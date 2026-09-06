@@ -1,3 +1,6 @@
+import torch
+from torch_geometric.data import Data
+
 def get_size(n, edge, check, start):
     s = [(start, 0, False)]; size = [0] * n
     while s:
@@ -43,9 +46,6 @@ def get_centroid_tree(n, edge):
 
     return cent_tree
 
-def get_vn_tree(n, edge):
-    return get_centroid_tree(n, edge)
-
 def get_vn_connect(n, m, bag):
     vn_connect = []
     for i in range(n, n+m):
@@ -67,9 +67,6 @@ def tree_decomposition(n, edges, max_width=None):
     order, bag = [], [None] * n
 
     for i in range(n):
-        if i % 50 == 0:
-            print(i, "processing...")
-
         while True:
             d, v = heappop(heap)
             if alive[v] and len(adj[v]) == d:
@@ -93,38 +90,159 @@ def tree_decomposition(n, edges, max_width=None):
             for i, v in enumerate(order) if len(bag[v]) > 1]
     return bags, tree
 
+class VNData(Data):
+    """원본 노드와 VN의 인덱스를 각각 처리하는 Data."""
 
-from torch_geometric.data import InMemoryDataset
-class CustomEasyDataset(InMemoryDataset):
-    def __init__(self, data_list):
-        super().__init__(None)
-        # collate 함수를 통해 리스트를 PyG 데이터셋 포맷으로 압축합니다.
-        self.data, self.slices = self.collate(data_list)
+    def __inc__(self, key, value, *args, **kwargs):
+        if key in ('vn_edge_index', 'node2vn'):
+            # 다음 그래프의 VN 번호를 앞 그래프의 VN 수만큼 이동
+            return self.vn_batch.numel()
 
-def op(dataset):
-    new_data_list = []
-    
-    for idx in range(len(dataset)):
-        data = dataset[idx]
-        n = data.num_nodes
-        edge = data.edge_index.t().detach().cpu().tolist()
-    
-        print(type(edge), len(edge), len(edge[0]))
-    
-        print("starting tree decomposition")
-        bags, bag_tree = tree_decomposition(n, edge)
-        
-        m = len(bags)
-        adj_bag_tree = [[] for _ in range(m)]
-        
-        for u, v in bag_tree:
-            adj_bag_tree[u].append(v)
-            adj_bag_tree[v].append(u)
-        
-        base_vn_tree = get_vn_tree(m, adj_bag_tree)
-        vn_edge = [(u + n, v + n) for u, v in base_vn_tree]
-            
-        new_tree = edge + vn_edge + get_vn_connect(n, m, bags)
-        new_data_list.append(new_tree)
+        if key == 'vn_batch':
+            # 개별 그래프의 0 → 배치 내 그래프 번호
+            return 1
 
-    return CustomEasyDataset(new_data_list)
+        return super().__inc__(key, value, *args, **kwargs)
+
+    def __cat_dim__(self, key, value, *args, **kwargs):
+        if key == 'vn_edge_index':
+            return 1
+
+        if key in ('node2vn', 'vn_batch'):
+            return 0
+
+        return super().__cat_dim__(key, value, *args, **kwargs)
+
+
+def build_centroid_forest(adj):
+    """bag tree/forest를 centroid tree/forest로 변환.
+
+    adj: bag의 무방향 인접 리스트
+    반환: VN 간 단방향 (parent, child) 목록
+    """
+    m = len(adj)
+    removed = [False] * m
+    centroid_edges = []
+
+    # 분리된 component도 각각 처리
+    for seed in range(m):
+        if removed[seed]:
+            continue
+
+        pending = [(seed, -1)]
+
+        while pending:
+            start, parent_centroid = pending.pop()
+            if removed[start]:
+                continue
+
+            # 현재 component의 DFS 순서와 부모
+            parent = {start: -1}
+            order = []
+            stack = [start]
+
+            while stack:
+                v = stack.pop()
+                order.append(v)
+
+                for u in adj[v]:
+                    if removed[u] or u in parent:
+                        continue
+                    parent[u] = v
+                    stack.append(u)
+
+            # subtree 크기
+            sizes = {v: 1 for v in order}
+
+            for v in reversed(order):
+                p = parent[v]
+                if p != -1:
+                    sizes[p] += sizes[v]
+
+            # 제거 시 가장 큰 component가 절반 이하인 centroid
+            component_size = len(order)
+            centroid = None
+
+            for v in order:
+                largest = component_size - sizes[v]
+
+                for u in adj[v]:
+                    if parent.get(u) == v:
+                        largest = max(largest, sizes[u])
+
+                if largest * 2 <= component_size:
+                    centroid = v
+                    break
+
+            if centroid is None:
+                raise ValueError('bag 연결 구조가 tree/forest인지 확인하세요.')
+
+            if parent_centroid != -1:
+                centroid_edges.append((parent_centroid, centroid))
+
+            removed[centroid] = True
+
+            for u in adj[centroid]:
+                if not removed[u]:
+                    pending.append((u, centroid))
+
+    return centroid_edges
+
+
+def add_ppa_virtual_nodes(data):
+    """원본 PPA 그래프에 node feature와 VN 필드 추가."""
+    n = int(data.num_nodes)
+    if n == 0:
+        raise ValueError('노드가 없는 그래프는 지원하지 않습니다.')
+
+    # 기존 tree_decomposition() 재사용
+    edges = data.edge_index.t().cpu().tolist()
+    bags, bag_tree = tree_decomposition(n, edges)
+    m = len(bags)
+
+    # 1. bag tree의 무방향 인접 리스트
+    adj = [[] for _ in range(m)]
+
+    for u, v in bag_tree:
+        adj[u].append(v)
+        adj[v].append(u)
+
+    # 2. centroid tree/forest 생성
+    centroid_edges = build_centroid_forest(adj)
+
+    # VN끼리 양방향 메시지를 주고받도록 역방향도 추가
+    if centroid_edges:
+        forward_edges = torch.tensor(
+            centroid_edges, dtype=torch.long
+        ).t().contiguous()
+
+        vn_edge_index = torch.cat(
+            [forward_edges, forward_edges.flip(0)],
+            dim=1,
+        )
+    else:
+        vn_edge_index = torch.empty((2, 0), dtype=torch.long)
+
+    # 3. 원본 노드마다 VN 하나 지정
+    # bags는 제거 순서로 정렬되어 있으므로,
+    # 마지막 등장 bag은 해당 노드가 제거될 때의 bag
+    node2vn = torch.full((n,), -1, dtype=torch.long)
+
+    for vn_id, bag in enumerate(bags):
+        members = torch.tensor(sorted(bag), dtype=torch.long)
+        node2vn[members] = vn_id
+
+    if (node2vn < 0).any().item():
+        raise ValueError('어떤 bag에도 배정되지 않은 노드가 있습니다.')
+
+    # 4. 원본 edge_index, edge_attr, y 등을 유지
+    result = VNData(**data.to_dict())
+    result.num_nodes = n
+    result.x = torch.zeros(n, dtype=torch.long)
+
+    # VN 번호는 원본 노드 번호와 별개로 0부터 시작
+    result.vn_edge_index = vn_edge_index
+    result.node2vn = node2vn
+    result.vn_batch = torch.zeros(m, dtype=torch.long)
+
+    return result
