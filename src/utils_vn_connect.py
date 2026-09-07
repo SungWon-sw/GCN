@@ -224,13 +224,13 @@ def add_ppa_virtual_nodes(data):
         vn_edge_index = torch.empty((2, 0), dtype=torch.long)
 
     # 3. 원본 노드마다 VN 하나 지정
-    # bags는 제거 순서로 정렬되어 있으므로,
-    # 마지막 등장 bag은 해당 노드가 제거될 때의 bag
+    # 제거 순서로 정렬된 bags 중 각 노드가 처음 등장한 bag에 배정
     node2vn = torch.full((n,), -1, dtype=torch.long)
 
     for vn_id, bag in enumerate(bags):
         members = torch.tensor(sorted(bag), dtype=torch.long)
-        node2vn[members] = vn_id
+        unassigned = members[node2vn[members] == -1]
+        node2vn[unassigned] = vn_id
 
     if (node2vn < 0).any().item():
         raise ValueError('어떤 bag에도 배정되지 않은 노드가 있습니다.')

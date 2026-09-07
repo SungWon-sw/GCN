@@ -6,7 +6,7 @@ data:
 # 모델 아키텍처 관련
 model:
   num_layers: 3
-  num_sublayers: 3
+  num_sublayers: 1
   dropout: 0.5 ######
 
 # 학습 관련

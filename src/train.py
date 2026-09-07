@@ -20,6 +20,19 @@ def load_config(config_path="configs/config.yaml"):
         return yaml.safe_load(f)
 
 
+def print_vn_stats(data, graph_index):
+    """Report direct real-node assignments for a single, unbatched graph."""
+    num_vn = data.vn_batch.numel()
+    counts = torch.bincount(data.node2vn, minlength=num_vn)
+    max_count, vn_index = counts.max(dim=0)
+    print(
+        f'VN stats (first train graph, dataset index={graph_index}) | '
+        f'Nodes: {data.num_nodes} | VNs: {num_vn} | '
+        f'Max nodes per VN: {max_count.item()} (VN index={vn_index.item()})',
+        flush=True,
+    )
+
+
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
 
@@ -103,6 +116,8 @@ def main():
     # 1. 데이터 파트: 복잡한 로직은 src/dataset.py가 처리하고 로더와 메타데이터만 받음
     train_loader, val_loader, test_loader, num_tasks, num_classes = build_loaders(cfg)
     print(f'num_tasks: {num_tasks}, num_classes: {num_classes}')
+    sample_graph = train_loader.dataset[0]
+    print_vn_stats(sample_graph, int(train_loader.dataset.indices[0]))
 
     node_encoder = PPANodeEncoder(cfg['train']['emb_dim'])
 

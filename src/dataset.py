@@ -2,7 +2,7 @@ import torch
 from torch.utils.data import Subset
 from torch_geometric.loader import DataLoader
 from ogb.graphproppred import PygGraphPropPredDataset
-from utils_vn_connect import add_ppa_virtual_nodes
+from vn_cache import CachedVNDataset
 
 
 def add_ppa_node_features(data):
@@ -22,25 +22,26 @@ def build_loaders(cfg):
     dataset = PygGraphPropPredDataset(
         name=cfg['data']['dataset_name'],
         root=cfg['data']['dir'],
-        transform=add_ppa_virtual_nodes,
     )
     split_idx = dataset.get_idx_split()
+    cached_dataset = CachedVNDataset(dataset)
+    print(f'VN cache: {cached_dataset.cache_dir} (compute once on first access)')
 
     # 2. DataLoader 생성
     train_loader = DataLoader(
-        Subset(dataset, split_idx['train']),
+        Subset(cached_dataset, split_idx['train']),
         batch_size=cfg['train']['batch_size'],
         shuffle=True,
         num_workers=cfg['train']['num_workers']
     )
     val_loader = DataLoader(
-        Subset(dataset, split_idx['valid']),
+        Subset(cached_dataset, split_idx['valid']),
         batch_size=cfg['train']['batch_size'],
         shuffle=False,
         num_workers=cfg['train']['num_workers']
     )
     test_loader = DataLoader(
-        Subset(dataset, split_idx['test']),
+        Subset(cached_dataset, split_idx['test']),
         batch_size=cfg['train']['batch_size'],
         shuffle=False,
         num_workers=cfg['train']['num_workers']
