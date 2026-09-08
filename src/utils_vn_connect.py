@@ -91,26 +91,19 @@ def tree_decomposition(n, edges, max_width=None):
     return bags, tree
 
 class VNData(Data):
-    """원본 노드와 VN의 인덱스를 각각 처리하는 Data."""
-
     def __inc__(self, key, value, *args, **kwargs):
-        if key in ('vn_edge_index', 'node2vn'):
-            # 다음 그래프의 VN 번호를 앞 그래프의 VN 수만큼 이동
-            return self.vn_batch.numel()
-
-        if key == 'vn_batch':
-            # 개별 그래프의 0 → 배치 내 그래프 번호
-            return 1
-
+        if key == 'vn_edge_index':
+            return int(self.num_vn)
+        
+        if key == 'vn_incidence':
+            return torch.tensor([[self.num_nodes], [int(self.num_vn)]])
+        
         return super().__inc__(key, value, *args, **kwargs)
 
     def __cat_dim__(self, key, value, *args, **kwargs):
-        if key == 'vn_edge_index':
+        if key in ('vn_edge_index', 'vn_incidence'):
             return 1
-
-        if key in ('node2vn', 'vn_batch'):
-            return 0
-
+        
         return super().__cat_dim__(key, value, *args, **kwargs)
 
 
@@ -223,26 +216,23 @@ def add_ppa_virtual_nodes(data):
     else:
         vn_edge_index = torch.empty((2, 0), dtype=torch.long)
 
-    # 3. 원본 노드마다 VN 하나 지정
-    # 제거 순서로 정렬된 bags 중 각 노드가 처음 등장한 bag에 배정
-    node2vn = torch.full((n,), -1, dtype=torch.long)
-
-    for vn_id, bag in enumerate(bags):
-        members = torch.tensor(sorted(bag), dtype=torch.long)
-        unassigned = members[node2vn[members] == -1]
-        node2vn[unassigned] = vn_id
-
-    if (node2vn < 0).any().item():
-        raise ValueError('어떤 bag에도 배정되지 않은 노드가 있습니다.')
+    # 3. 원본 노드마다 VN 지정
+    rows, cols = [], []
+    for k, bag in enumerate(bags):
+        for v in bag:
+            rows.append(int(v))
+            cols.append(k)
+    vn_incidence = torch.tensor([rows, cols], dtype=torch.long)
 
     # 4. 원본 edge_index, edge_attr, y 등을 유지
     result = VNData(**data.to_dict())
     result.num_nodes = n
-    result.x = torch.zeros(n, dtype=torch.long)
+    if result.get('x', None) is None:
+        result.x = torch.zeros(n, dtype=torch.long)
 
     # VN 번호는 원본 노드 번호와 별개로 0부터 시작
     result.vn_edge_index = vn_edge_index
-    result.node2vn = node2vn
-    result.vn_batch = torch.zeros(m, dtype=torch.long)
+    result.vn_incidence = vn_incidence
+    result.num_vn        = torch.tensor(m)
 
     return result

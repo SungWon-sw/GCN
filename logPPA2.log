@@ -1,0 +1,40 @@
+nohup: ignoring input
+Using device: cuda:8
+VN cache: ogbg_ppa/processed/vn_cache/d46232cf05c3655650e8 (compute once on first access)
+num_tasks: 1, num_classes: 37
+Parameters: 1,200,337
+Traceback (most recent call last):
+  File "./src/train.py", line 151, in <module>
+    main()
+  File "./src/train.py", line 125, in main
+    loss = train_one_epoch(
+  File "./src/train.py", line 31, in train_one_epoch
+    for data in loader:
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 630, in __next__
+    data = self._next_data()
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1345, in _next_data
+    return self._process_data(data)
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataloader.py", line 1371, in _process_data
+    data.reraise()
+  File "/usr/local/lib/python3.8/dist-packages/torch/_utils.py", line 694, in reraise
+    raise exception
+AttributeError: Caught AttributeError in DataLoader worker process 0.
+Original Traceback (most recent call last):
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/_utils/worker.py", line 308, in _worker_loop
+    data = fetcher.fetch(index)
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/_utils/fetch.py", line 49, in fetch
+    data = self.dataset.__getitems__(possibly_batched_index)
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataset.py", line 364, in __getitems__
+    return [self.dataset[self.indices[idx]] for idx in indices]
+  File "/usr/local/lib/python3.8/dist-packages/torch/utils/data/dataset.py", line 364, in <listcomp>
+    return [self.dataset[self.indices[idx]] for idx in indices]
+  File "/src/gs25048/simR/src/vn_cache.py", line 53, in __getitem__
+    fields = {
+  File "/src/gs25048/simR/src/vn_cache.py", line 54, in <dictcomp>
+    key: getattr(result, key)
+  File "/src/gs25048/.local/lib/python3.8/site-packages/torch_geometric/data/data.py", line 561, in __getattr__
+    return getattr(self._store, key)
+  File "/src/gs25048/.local/lib/python3.8/site-packages/torch_geometric/data/storage.py", line 96, in __getattr__
+    raise AttributeError(
+AttributeError: 'GlobalStorage' object has no attribute 'v'
+

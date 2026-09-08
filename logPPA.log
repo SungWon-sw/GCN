@@ -1,0 +1,23 @@
+nohup: ignoring input
+Using device: cuda:8
+This will download 2.79GB. Will you proceed? (y/N)
+Traceback (most recent call last):
+  File "./src/train.py", line 166, in <module>
+    main()
+  File "./src/train.py", line 117, in main
+    train_loader, val_loader, test_loader, num_tasks, num_classes = build_loaders(cfg)
+  File "/src/gs25048/simR/src/dataset.py", line 22, in build_loaders
+    dataset = PygGraphPropPredDataset(
+  File "/src/gs25048/.local/lib/python3.8/site-packages/ogb/graphproppred/dataset_pyg.py", line 66, in __init__
+    super(PygGraphPropPredDataset, self).__init__(self.root, transform, pre_transform)
+  File "/src/gs25048/.local/lib/python3.8/site-packages/torch_geometric/data/in_memory_dataset.py", line 81, in __init__
+    super().__init__(root, transform, pre_transform, pre_filter, log,
+  File "/src/gs25048/.local/lib/python3.8/site-packages/torch_geometric/data/dataset.py", line 112, in __init__
+    self._download()
+  File "/src/gs25048/.local/lib/python3.8/site-packages/torch_geometric/data/dataset.py", line 229, in _download
+    self.download()
+  File "/src/gs25048/.local/lib/python3.8/site-packages/ogb/graphproppred/dataset_pyg.py", line 108, in download
+    if decide_download(url):
+  File "/src/gs25048/.local/lib/python3.8/site-packages/ogb/utils/url.py", line 17, in decide_download
+    return input("This will download %.2fGB. Will you proceed? (y/N)\n" % (size)).lower() == "y"
+OSError: [Errno 9] Bad file descriptor

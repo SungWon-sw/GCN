@@ -142,16 +142,23 @@ class GCN(nn.Module):
     # ----------------------------------------------------------------------
     def forward(self, data):
         vn_edge_index = data.vn_edge_index
-        node2vn       = data.node2vn
-        num_vn        = data.vn_batch.size(0)
+        inc_node, inc_vn       = data.vn_incidence
+        vn_batch = scatter(data.batch[inc_node], inc_vn, dim=0,
+                   dim_size=int(inc_vn.max()) + 1, reduce='max')
+        num_vn        = vn_batch.size(0)
+        N = data.x.size(0)
 
+        h = self.node_encoder(data.x)               # [N, D]
+        memb = scatter(torch.ones(inc_node.numel(), device=h.device),
+                   inc_node, dim=0, dim_size=N, reduce='sum').clamp(min=1)
+        
         vn = self.virtualnode_embedding(
             torch.zeros(num_vn, dtype=torch.long, device=data.x.device))      # [num_vn, D]
 
-        h = self.node_encoder(data.x)               # [N, D]
 
         for i in range(self.num_layers):
-            h = h + vn[node2vn]                                              # inject hub state
+            h = h + scatter(vn[inc_vn], inc_node, dim=0, dim_size=N, reduce='mean')
+                                             # inject hub state
             h = self.convs[i](h, data.edge_index, data.edge_attr)
             h = self.bns[i](h)
             h = F.dropout(F.relu(h) if i < self.num_layers - 1 else h,
@@ -159,7 +166,9 @@ class GCN(nn.Module):
 
             if i < self.num_layers - 1:
                 # pool real nodes into their hub, refine, diffuse over centroid tree
-                pooled = scatter(h, node2vn, dim=0, dim_size=num_vn, reduce='sum')
+                msg    = h[inc_node] / memb[inc_node].view(-1, 1)
+
+                pooled = scatter(msg, inc_vn, dim=0, dim_size=num_vn, reduce='sum')
                 update = self.mlp_virtualnode[i](pooled + vn)
                 update = F.dropout(update, self.drop_ratio, training=self.training)
                 vn     = vn + update

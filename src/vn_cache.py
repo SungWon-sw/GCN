@@ -52,7 +52,7 @@ class CachedVNDataset(Dataset):
             result = add_ppa_virtual_nodes(data)
             fields = {
                 key: getattr(result, key)
-                for key in ('vn_edge_index', 'node2vn', 'vn_batch')
+                for key in ('vn_edge_index')
             }
             path.parent.mkdir(parents=True, exist_ok=True)
             # Publish only complete files, including when multiple workers/runs
