@@ -1,0 +1,54 @@
+nohup: ignoring input
+Using device: cuda:8 | seed: 42
+VN cache: ogbg_ppa/processed/vn_cache/094aaa235a97a5532d4c (compute once on first access)
+num_tasks: 1, num_classes: 37
+Parameters: 2,660,137
+epochs=150 warmup=8 amp=bf16 grad_clip=1.0 ema_decay=0.999
+Epoch 001 | Loss: 2.0579 | Val Acc: 0.4478 | Best: 0.4478 | lr: 2.50e-04
+Epoch 002 | Loss: 1.4012 | Val Acc: 0.4806 | Best: 0.4806 | lr: 3.75e-04
+Epoch 003 | Loss: 1.1504 | Val Acc: 0.5125 | Best: 0.5125 | lr: 5.00e-04
+Epoch 004 | Loss: 0.9934 | Val Acc: 0.5229 | Best: 0.5229 | lr: 6.25e-04
+Epoch 005 | Loss: 0.8831 | Val Acc: 0.5384 | Best: 0.5384 | lr: 7.50e-04
+Epoch 006 | Loss: 0.8238 | Val Acc: 0.5108 | Best: 0.5384 | lr: 8.75e-04
+Epoch 007 | Loss: 0.7826 | Val Acc: 0.5523 | Best: 0.5523 | lr: 1.00e-03
+Epoch 008 | Loss: 0.7670 | Val Acc: 0.5728 | Best: 0.5728 | lr: 1.00e-03
+Epoch 009 | Loss: 0.7220 | Val Acc: 0.5671 | Best: 0.5728 | lr: 1.00e-03
+Epoch 010 | Loss: 0.6899 | Val Acc: 0.5803 | Best: 0.5803 | lr: 1.00e-03
+Epoch 011 | Loss: 0.6724 | Val Acc: 0.5649 | Best: 0.5803 | lr: 9.99e-04
+Epoch 012 | Loss: 0.6514 | Val Acc: 0.5050 | Best: 0.5803 | lr: 9.98e-04
+Epoch 013 | Loss: 0.6442 | Val Acc: 0.5525 | Best: 0.5803 | lr: 9.97e-04
+Epoch 014 | Loss: 0.6270 | Val Acc: 0.5533 | Best: 0.5803 | lr: 9.96e-04
+Epoch 015 | Loss: 0.6206 | Val Acc: 0.5832 | Best: 0.5832 | lr: 9.94e-04
+Epoch 016 | Loss: 0.6017 | Val Acc: 0.5868 | Best: 0.5868 | lr: 9.92e-04
+Epoch 017 | Loss: 0.6024 | Val Acc: 0.5752 | Best: 0.5868 | lr: 9.90e-04
+Epoch 018 | Loss: 0.5903 | Val Acc: 0.5646 | Best: 0.5868 | lr: 9.88e-04
+Epoch 019 | Loss: 0.5831 | Val Acc: 0.5767 | Best: 0.5868 | lr: 9.85e-04
+Epoch 020 | Loss: 0.5796 | Val Acc: 0.5319 | Best: 0.5868 | lr: 9.82e-04
+Epoch 021 | Loss: 0.5689 | Val Acc: 0.5584 | Best: 0.5868 | lr: 9.79e-04
+Epoch 022 | Loss: 0.5645 | Val Acc: 0.5691 | Best: 0.5868 | lr: 9.76e-04
+Epoch 023 | Loss: 0.5609 | Val Acc: 0.5712 | Best: 0.5868 | lr: 9.73e-04
+Epoch 024 | Loss: 0.5563 | Val Acc: 0.5420 | Best: 0.5868 | lr: 9.69e-04
+Epoch 025 | Loss: 0.5522 | Val Acc: 0.5761 | Best: 0.5868 | lr: 9.65e-04
+Epoch 026 | Loss: 0.5466 | Val Acc: 0.6008 | Best: 0.6008 | lr: 9.61e-04
+Epoch 027 | Loss: 0.5410 | Val Acc: 0.5737 | Best: 0.6008 | lr: 9.56e-04
+Epoch 028 | Loss: 0.5413 | Val Acc: 0.5709 | Best: 0.6008 | lr: 9.52e-04
+Epoch 029 | Loss: 0.5361 | Val Acc: 0.5584 | Best: 0.6008 | lr: 9.47e-04
+Epoch 030 | Loss: 0.5330 | Val Acc: 0.5483 | Best: 0.6008 | lr: 9.42e-04
+Epoch 031 | Loss: 0.5279 | Val Acc: 0.5807 | Best: 0.6008 | lr: 9.37e-04
+Epoch 032 | Loss: 0.5237 | Val Acc: 0.6000 | Best: 0.6008 | lr: 9.31e-04
+Epoch 033 | Loss: 0.5209 | Val Acc: 0.5638 | Best: 0.6008 | lr: 9.25e-04
+Epoch 034 | Loss: 0.5123 | Val Acc: 0.5910 | Best: 0.6008 | lr: 9.20e-04
+Epoch 035 | Loss: 0.5151 | Val Acc: 0.6043 | Best: 0.6043 | lr: 9.13e-04
+Epoch 036 | Loss: 0.5072 | Val Acc: 0.4887 | Best: 0.6043 | lr: 9.07e-04
+Epoch 037 | Loss: 0.5064 | Val Acc: 0.5473 | Best: 0.6043 | lr: 9.01e-04
+Epoch 038 | Loss: 0.5024 | Val Acc: 0.5910 | Best: 0.6043 | lr: 8.94e-04
+Epoch 039 | Loss: 0.5007 | Val Acc: 0.5206 | Best: 0.6043 | lr: 8.87e-04
+Epoch 040 | Loss: 0.4943 | Val Acc: 0.5804 | Best: 0.6043 | lr: 8.80e-04
+Epoch 041 | Loss: 0.4921 | Val Acc: 0.6062 | Best: 0.6062 | lr: 8.73e-04
+Epoch 042 | Loss: 0.4863 | Val Acc: 0.5984 | Best: 0.6062 | lr: 8.65e-04
+Epoch 043 | Loss: 0.4874 | Val Acc: 0.6045 | Best: 0.6062 | lr: 8.57e-04
+Epoch 044 | Loss: 0.4814 | Val Acc: 0.5887 | Best: 0.6062 | lr: 8.50e-04
+Epoch 045 | Loss: 0.4814 | Val Acc: 0.6002 | Best: 0.6062 | lr: 8.42e-04
+Epoch 046 | Loss: 0.4741 | Val Acc: 0.6099 | Best: 0.6099 | lr: 8.33e-04
+Epoch 047 | Loss: 0.4706 | Val Acc: 0.5915 | Best: 0.6099 | lr: 8.25e-04
+Epoch 048 | Loss: 0.4745 | Val Acc: 0.5570 | Best: 0.6099 | lr: 8.17e-04

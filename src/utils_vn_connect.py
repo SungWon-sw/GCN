@@ -73,8 +73,8 @@ def tree_decomposition(n, edges, max_width=None):
                 break
         nb = list(adj[v])
         bag[v] = frozenset(nb + [v])
-        for i, a in enumerate(nb):
-            for b in nb[i+1:]:
+        for j, a in enumerate(nb):
+            for b in nb[j+1:]:
                 if b not in adj[a]:
                     adj[a].add(b); adj[b].add(a)
         for u in nb:
@@ -89,6 +89,57 @@ def tree_decomposition(n, edges, max_width=None):
     tree = [(i, pos[min(bag[v] - {v}, key=pos.get)])
             for i, v in enumerate(order) if len(bag[v]) > 1]
     return bags, tree
+
+
+def merge_subset_bags(bags, tree):
+    """Drop bags nested in a tree-neighbour, contracting that edge.
+
+    ``tree_decomposition`` emits one bag per eliminated vertex (N bags). Whenever
+    a bag is contained in an adjacent bag it adds no separator of its own, so we
+    merge it away. The result is a tree decomposition of the *same width* (the
+    largest bag is untouched, so the treewidth estimate is unchanged) whose bags
+    are the maximal cliques of the min-degree chordal completion (~0.65 N on
+    ogbg-ppa). Node-to-bag membership downstream is rebuilt from ``bags``.
+    """
+    bag = [set(b) for b in bags]
+    adj = [set() for _ in bag]
+    for a, b in tree:
+        adj[a].add(b)
+        adj[b].add(a)
+    alive = [True] * len(bag)
+
+    changed = True
+    while changed:
+        changed = False
+        for a in range(len(bag)):
+            if not alive[a]:
+                continue
+            keep = drop = None
+            for b in adj[a]:
+                if bag[a] <= bag[b]:
+                    keep, drop = b, a
+                    break
+                if bag[b] <= bag[a]:
+                    keep, drop = a, b
+                    break
+            if drop is None:
+                continue
+            bag[keep] |= bag[drop]
+            for c in adj[drop]:
+                adj[c].discard(drop)
+                if c != keep:
+                    adj[c].add(keep)
+                    adj[keep].add(c)
+            adj[keep].discard(drop)
+            alive[drop] = False
+            changed = True
+
+    survivors = [i for i, ok in enumerate(alive) if ok]
+    remap = {old: new for new, old in enumerate(survivors)}
+    reduced_bags = [frozenset(bag[i]) for i in survivors]
+    reduced_tree = [(remap[i], remap[j])
+                    for i in survivors for j in adj[i] if i < j]
+    return reduced_bags, reduced_tree
 
 class VNData(Data):
     def __inc__(self, key, value, *args, **kwargs):
@@ -188,9 +239,10 @@ def add_ppa_virtual_nodes(data):
     if n == 0:
         raise ValueError('노드가 없는 그래프는 지원하지 않습니다.')
 
-    # 기존 tree_decomposition() 재사용
+    # 기존 tree_decomposition() 재사용 후 중복 bag 병합 (width 불변, VN 수 감소)
     edges = data.edge_index.t().cpu().tolist()
     bags, bag_tree = tree_decomposition(n, edges)
+    bags, bag_tree = merge_subset_bags(bags, bag_tree)
     m = len(bags)
 
     # 1. bag tree의 무방향 인접 리스트

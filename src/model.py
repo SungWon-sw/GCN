@@ -1,20 +1,19 @@
 """
-GCN + Centroid-Tree virtual nodes for ogbg-code2  (bug-fixed version)
+GCN + Centroid-Tree virtual nodes for ogbg-ppa.
 
-Assumptions about the batched `data` object (in addition to the usual
-x, edge_index, edge_attr, node_depth, batch):
+Fields expected on the batched `data` object (produced by
+utils_vn_connect.add_ppa_virtual_nodes, then cached / collated):
 
-    data.vn_edge_index : LongTensor [2, Evn]  edges of the centroid tree
-                                              (indices in [0, num_vn))
-    data.vn_batch      : LongTensor [num_vn]  graph id of every centroid-tree node
-    data.node2vn       : LongTensor [N]       for every real node, the index of
-                                              the centroid-tree node it is attached to
+    data.x             : LongTensor [N]       zeros (ppa has no node features)
+    data.edge_index    : LongTensor [2, E]    real protein-association graph
+    data.edge_attr     : Tensor     [E, 7]    real edge features
+    data.batch         : LongTensor [N]       graph id per real node
+    data.vn_incidence  : LongTensor [2, M]    (real node, virtual node) memberships
+    data.vn_edge_index : LongTensor [2, Evn]  centroid-tree edges over virtual nodes
+    data.num_vn        : LongTensor scalar    #virtual nodes for the graph
 
-If you only have one virtual node per graph (classic OGB VN), pass
-    data.node2vn      = data.batch
-    data.vn_batch     = torch.arange(num_graphs)
-    data.vn_edge_index = torch.empty(2, 0, dtype=torch.long)
-and this module degenerates to the standard GCN-with-virtual-node.
+Each virtual node is a bag of the (reduced) tree decomposition; the virtual
+nodes are wired into the centroid tree of that bag tree.
 """
 
 import torch
@@ -100,6 +99,14 @@ class GCN(nn.Module):
         self.num_sublayers = num_sublayers
         self.drop_ratio    = drop_ratio
         self.max_seq_len   = max_seq_len
+        # residual around each centroid-tree block; alpha scales the propagated
+        # branch. vn_residual=false recovers the plain "replace vn" behaviour.
+        self.vn_residual       = bool(model_cfg.get('vn_residual', True))
+        self.vn_residual_alpha = float(model_cfg.get('vn_residual_alpha', 1.0))
+        # skip connection around each backbone GCN layer (inject+conv+bn+dropout),
+        # wired to the previous layer's output as in the OGB reference GNN.
+        # backbone_residual=false recovers the plain feed-forward stack.
+        self.backbone_residual = bool(model_cfg.get('backbone_residual', True))
 
         self.node_encoder = node_encoder
 
@@ -157,12 +164,15 @@ class GCN(nn.Module):
 
 
         for i in range(self.num_layers):
+            h_in = h                         # previous layer output (OGB-ref skip target)
             h = h + scatter(vn[inc_vn], inc_node, dim=0, dim_size=N, reduce='mean')
                                              # inject hub state
             h = self.convs[i](h, data.edge_index, data.edge_attr)
             h = self.bns[i](h)
             h = F.dropout(F.relu(h) if i < self.num_layers - 1 else h,
                           self.drop_ratio, training=self.training)
+            if self.backbone_residual:
+                h = h + h_in                 # skip around inject+conv+bn+dropout
 
             if i < self.num_layers - 1:
                 # pool real nodes into their hub, refine, diffuse over centroid tree
@@ -172,7 +182,12 @@ class GCN(nn.Module):
                 update = self.mlp_virtualnode[i](pooled + vn)
                 update = F.dropout(update, self.drop_ratio, training=self.training)
                 vn     = vn + update
-                vn     = self._propagate_vn(vn, vn_edge_index, block=i)
+
+                propagated = self._propagate_vn(vn, vn_edge_index, block=i)
+                if self.vn_residual:
+                    vn = vn + self.vn_residual_alpha * propagated
+                else:
+                    vn = propagated
 
         h_graph = global_mean_pool(h, data.batch)
-        return self.graph_pred_linear(h_graph)                # list of [B, num_tasks]
+        return self.graph_pred_linear(h_graph)                # [B, num_classes]
