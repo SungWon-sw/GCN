@@ -1,0 +1,58 @@
+nohup: ignoring input
+Using device: cuda:2
+Vocab coverage: 0.9026
+/src/gs25048/anaconda3/lib/python3.9/site-packages/torch_geometric/data/in_memory_dataset.py:300: UserWarning: It is not recommended to directly access the internal storage format `data` of an 'InMemoryDataset'. If you are absolutely certain what you are doing, access the internal storage via `InMemoryDataset._data` instead to suppress this warning. Alternatively, you can access stacked individual attributes of every graph via `dataset.{attr_name}`.
+  warnings.warn(msg)
+num_nodetypes: 97, num_nodeattributes: 10030
+Parameters: 10,848,710
+Epoch 001 | Loss: 14.8298 | Val F1: 0.0937 | Best: 0.0937
+Epoch 002 | Loss: 13.4835 | Val F1: 0.1167 | Best: 0.1167
+Epoch 003 | Loss: 12.9198 | Val F1: 0.1252 | Best: 0.1252
+Epoch 004 | Loss: 12.5804 | Val F1: 0.1315 | Best: 0.1315
+Epoch 005 | Loss: 12.3496 | Val F1: 0.1359 | Best: 0.1359
+Epoch 006 | Loss: 12.1744 | Val F1: 0.1387 | Best: 0.1387
+Epoch 007 | Loss: 12.0546 | Val F1: 0.1379 | Best: 0.1387
+Epoch 008 | Loss: 11.9547 | Val F1: 0.1367 | Best: 0.1387
+Epoch 009 | Loss: 11.8685 | Val F1: 0.1396 | Best: 0.1396
+Epoch 010 | Loss: 11.7996 | Val F1: 0.1426 | Best: 0.1426
+Epoch 011 | Loss: 11.7405 | Val F1: 0.1430 | Best: 0.1430
+Epoch 012 | Loss: 11.6834 | Val F1: 0.1464 | Best: 0.1464
+Epoch 013 | Loss: 11.6327 | Val F1: 0.1444 | Best: 0.1464
+Epoch 014 | Loss: 11.5974 | Val F1: 0.1447 | Best: 0.1464
+Epoch 015 | Loss: 11.5550 | Val F1: 0.1419 | Best: 0.1464
+Epoch 016 | Loss: 11.5140 | Val F1: 0.1412 | Best: 0.1464
+Epoch 017 | Loss: 11.4844 | Val F1: 0.1503 | Best: 0.1503
+Epoch 018 | Loss: 11.4485 | Val F1: 0.1469 | Best: 0.1503
+Epoch 019 | Loss: 11.4195 | Val F1: 0.1502 | Best: 0.1503
+Epoch 020 | Loss: 11.3844 | Val F1: 0.1474 | Best: 0.1503
+Epoch 021 | Loss: 11.3612 | Val F1: 0.1507 | Best: 0.1507
+Epoch 022 | Loss: 11.3256 | Val F1: 0.1530 | Best: 0.1530
+Epoch 023 | Loss: 11.2942 | Val F1: 0.1527 | Best: 0.1530
+Epoch 024 | Loss: 11.2649 | Val F1: 0.1522 | Best: 0.1530
+Epoch 025 | Loss: 11.2415 | Val F1: 0.1509 | Best: 0.1530
+Epoch 026 | Loss: 11.2164 | Val F1: 0.1491 | Best: 0.1530
+Epoch 027 | Loss: 11.1854 | Val F1: 0.1493 | Best: 0.1530
+Epoch 028 | Loss: 11.1645 | Val F1: 0.1490 | Best: 0.1530
+Epoch 029 | Loss: 11.1442 | Val F1: 0.1520 | Best: 0.1530
+Epoch 030 | Loss: 11.1187 | Val F1: 0.1503 | Best: 0.1530
+Epoch 031 | Loss: 11.0977 | Val F1: 0.1508 | Best: 0.1530
+Epoch 032 | Loss: 11.0791 | Val F1: 0.1521 | Best: 0.1530
+Epoch 033 | Loss: 11.0557 | Val F1: 0.1514 | Best: 0.1530
+Epoch 034 | Loss: 11.0418 | Val F1: 0.1498 | Best: 0.1530
+Epoch 035 | Loss: 11.0241 | Val F1: 0.1511 | Best: 0.1530
+Epoch 036 | Loss: 11.0010 | Val F1: 0.1500 | Best: 0.1530
+Epoch 037 | Loss: 10.9841 | Val F1: 0.1530 | Best: 0.1530
+Epoch 038 | Loss: 10.9683 | Val F1: 0.1478 | Best: 0.1530
+Epoch 039 | Loss: 10.9517 | Val F1: 0.1501 | Best: 0.1530
+Epoch 040 | Loss: 10.9333 | Val F1: 0.1501 | Best: 0.1530
+Epoch 041 | Loss: 10.9202 | Val F1: 0.1502 | Best: 0.1530
+Epoch 042 | Loss: 10.9031 | Val F1: 0.1490 | Best: 0.1530
+Epoch 043 | Loss: 10.8849 | Val F1: 0.1494 | Best: 0.1530
+Epoch 044 | Loss: 10.8702 | Val F1: 0.1518 | Best: 0.1530
+Epoch 045 | Loss: 10.8575 | Val F1: 0.1511 | Best: 0.1530
+Epoch 046 | Loss: 10.8384 | Val F1: 0.1504 | Best: 0.1530
+Epoch 047 | Loss: 10.8293 | Val F1: 0.1529 | Best: 0.1530
+Epoch 048 | Loss: 10.8126 | Val F1: 0.1507 | Best: 0.1530
+Epoch 049 | Loss: 10.8001 | Val F1: 0.1519 | Best: 0.1530
+Epoch 050 | Loss: 10.7837 | Val F1: 0.1501 | Best: 0.1530
+==> Final Test F1: 0.1644

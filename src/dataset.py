@@ -26,7 +26,7 @@ def build_loaders(cfg):
         return encode_y_to_arr(augment_edge(data), vocab2idx, cfg['train']['max_seq_len'])
     
     dataset.transform = transform_fn
-    dataset = convert_into_easy(dataset)
+    dataset = convert_into_easy(dataset, num_workers=cfg['train']['num_workers'])
 
     # 4. DataLoader 생성
     train_loader = DataLoader(
