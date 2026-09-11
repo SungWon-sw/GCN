@@ -6,7 +6,20 @@ from ogb.graphproppred import Evaluator
 from model import GCN
 from dataset import build_loaders  # 방금 만든 함수 임포트
 from utils import decode_arr_to_seq, ASTNodeEncoder  # 평가 및 엔코더에 필요한 것만 유지
+import random
+import numpy as np
 
+def set_seed(seed):
+    """RNG 시드 고정. multi-seed 평균±std 용도라 bitwise 결정성까지는 안 감
+    (cudnn.benchmark 유지). None 이면 시드 고정을 건너뜀."""
+    if seed is None:
+        return
+    seed = int(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
 # 안전한 모델 로드를 위한 패치
 _original_load = torch.load
 def _patched_load(*args, **kwargs):
@@ -55,6 +68,8 @@ def evaluate(model, loader, idx2vocab, evaluator, device):
 
 def main():
     cfg = load_config()
+    seed = cfg['train'].get('seed', 0)
+    set_seed(seed)
     cuda_num = cfg['cuda']['cuda_number']  # config에서 번호 직접 추출 (예: 7)
     device = torch.device(f'cuda:{cuda_num}')
     print('Using device:', device)
@@ -84,18 +99,19 @@ def main():
 
     # 3. 학습 루프 파트
     best_f1 = 0.0
+    model_name=cfg['model']['model_name']
     for epoch in range(1, cfg['train']['epochs'] + 1):
         loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
         val_f1 = evaluate(model, val_loader, idx2vocab, evaluator, device)
         
         if val_f1 > best_f1:
             best_f1 = val_f1
-            torch.save(model.state_dict(), 'best_model.pt')
+            torch.save(model.state_dict(), model_name)
             
         print(f'Epoch {epoch:03d} | Loss: {loss:.4f} | Val F1: {val_f1:.4f} | Best: {best_f1:.4f}')
 
     # 4. 최종 테스트 평가
-    model.load_state_dict(torch.load('best_model.pt'))
+    model.load_state_dict(torch.load(model_name))
     test_f1 = evaluate(model, test_loader, idx2vocab, evaluator, device)
     print(f'==> Final Test F1: {test_f1:.4f}')
 
