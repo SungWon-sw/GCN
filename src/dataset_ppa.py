@@ -1,3 +1,6 @@
+import builtins
+import contextlib
+
 import torch
 from torch.utils.data import Subset
 from torch_geometric.loader import DataLoader
@@ -11,12 +14,32 @@ def _add_dummy_node_feature(data):
     return data
 
 
+@contextlib.contextmanager
+def _auto_decline_dataset_update_prompt():
+    """ogb가 '데이터셋이 갱신됐다'며 input()으로 재다운로드 여부를 물어보는데,
+    nohup 등 stdin이 없는 환경에서는 그 input() 자체가 OSError(Bad file
+    descriptor)로 죽는다. 여기선 무조건 'N'(기존 캐시 유지)으로 자동 응답한다."""
+    original_input = builtins.input
+
+    def _auto_no(prompt=''):
+        print(prompt, end='')
+        print('N  (자동 응답 — 비대화형 환경이라 기존 캐시 데이터셋을 그대로 사용)')
+        return 'N'
+
+    builtins.input = _auto_no
+    try:
+        yield
+    finally:
+        builtins.input = original_input
+
+
 def build_loaders(cfg):
     """VN/centroid 전처리를 전혀 거치지 않고 원본 edge_index/edge_attr을 그대로 사용한다."""
-    dataset = PygGraphPropPredDataset(
-        name=cfg['data']['dataset_name'],
-        transform=_add_dummy_node_feature,
-    )
+    with _auto_decline_dataset_update_prompt():
+        dataset = PygGraphPropPredDataset(
+            name=cfg['data']['dataset_name'],
+            transform=_add_dummy_node_feature,
+        )
     split_idx = dataset.get_idx_split()
 
     train_loader = DataLoader(
