@@ -38,13 +38,13 @@ class GCNConv(MessagePassing):
         edge_emb = self.edge_encoder(edge_attr.float())
 
         row, col       = edge_index
-        deg          = degree(row, x.size(0), dtype=x.dtype) + 1
+        deg          = degree(row, x.size(0), dtype=torch.float32) + 1   # bf16 은 256 초과 정수 부정확
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0          # isolated node -> 0, not 1e9
-        norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+        deg_inv_sqrt = deg_inv_sqrt.masked_fill(torch.isinf(deg_inv_sqrt), 0)   # isolated node -> 0, not 1e9
+        norm = (deg_inv_sqrt[row] * deg_inv_sqrt[col]).to(x.dtype)
 
         agg = self.propagate(edge_index, x=x, edge_attr=edge_emb, norm=norm)
-        root = F.relu(x + self.root_emb.weight) / deg.view(-1, 1)
+        root = F.relu(x + self.root_emb.weight) / deg.to(x.dtype).view(-1, 1)
 
         return agg + root
 
@@ -68,13 +68,13 @@ class GCNConvVN(MessagePassing):
         x = self.linear(x)
 
         row, _       = edge_index
-        deg          = degree(row, x.size(0), dtype=x.dtype)
+        deg          = degree(row, x.size(0), dtype=torch.float32)
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
-        norm = deg_inv_sqrt[edge_index[0]] * deg_inv_sqrt[edge_index[1]]
+        deg_inv_sqrt = deg_inv_sqrt.masked_fill(torch.isinf(deg_inv_sqrt), 0)
+        norm = (deg_inv_sqrt[edge_index[0]] * deg_inv_sqrt[edge_index[1]]).to(x.dtype)
 
         agg = self.propagate(edge_index, x=x, norm=norm)
-        return agg + F.relu(x + self.root_emb.weight) / deg.clamp(min=1).view(-1, 1)
+        return agg + F.relu(x + self.root_emb.weight) / deg.clamp(min=1).to(x.dtype).view(-1, 1)
 
     def message(self, x_j, norm):
         return norm.view(-1, 1) * F.relu(x_j)
@@ -150,9 +150,10 @@ class GCN(nn.Module):
     def forward(self, data):
         vn_edge_index = data.vn_edge_index
         inc_node, inc_vn       = data.vn_incidence
-        vn_batch = scatter(data.batch[inc_node], inc_vn, dim=0,
-                   dim_size=int(inc_vn.max()) + 1, reduce='max')
-        num_vn        = vn_batch.size(0)
+        # train.to_device 가 미리 계산해 둔 python int 사용 (없으면 .max() 로 폴백 = GPU 동기화)
+        num_vn = getattr(data, 'num_vn_total', None)
+        if num_vn is None:
+            num_vn = int(inc_vn.max()) + 1
         N = data.x.size(0)
 
         h = self.node_encoder(data.x)               # [N, D]

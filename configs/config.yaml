@@ -6,28 +6,30 @@ data:
 # 모델 아키텍처 관련
 model:
   num_layers: 4
-  num_sublayers: 2
+  num_sublayers: 1
   vn_residual: true
   vn_residual_alpha: 0.5
   backbone_residual: true
-
+  model_name: "best_model_real5.pt"
 # 학습 관련
 train:
-  seed: 42
-  weight_decay: 0.0001
-  epochs: 150
+  seed: 2213
+  weight_decay: 1.0965160771089534e-05
+  epochs: 200
   warmup_epochs: 5
   grad_clip: 1.0 # null 하면 취소
   ema_decay: null
   amp: true # GPU 최적화
-  batch_size: 32
+  batch_size: 16
   max_seq_len : 5
-  lr: 0.001
-  num_workers: 4
+  lr: 0.000160505700038982
+  num_workers: 6
   num_vocab: 5000
-  emb_dim : 300
+  emb_dim : 384
   max_depth : 20
-  drop_ratio : 0.35
+  drop_ratio : 0.3502004054765884
   
 cuda:
-  cuda_number: 8
+  cuda_number: 5
+  
+  # 'lr': 0.000160505700038982, 'weight_decay': 1.0965160771089534e-05, 'drop_ratio': 0.3502004054765884, 'emb_dim': 384, 'num_layers': 4, 'num_sublayers': 1, 'batch_size': 16
