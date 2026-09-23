@@ -1,0 +1,21 @@
+# VN/centroid 기작 없는 순수 GCN baseline (ogbg-ppa)
+data:
+  dataset_name: "ogbg-ppa"
+  dir: "./"
+  seed: 42
+
+model:
+  num_layers: 5
+  model_name: 'best_model_ppa.pt'
+
+train:
+  weight_decay: 0.0
+  epochs: 100
+  batch_size: 32
+  lr: 0.001
+  num_workers: 4
+  emb_dim: 300
+  drop_ratio: 0.5
+
+cuda:
+  cuda_number: 0
