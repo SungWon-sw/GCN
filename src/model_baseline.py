@@ -34,7 +34,11 @@ class GCNConv(MessagePassing):
 class GCNGraphClassifier(nn.Module):
     """VN/centroid 기작이 전혀 없는 baseline GCN. 그래프 하나당 단일 라벨(num_tasks 클래스)을
     예측한다. ogbg-ppa처럼 노드 입력 피처가 없는 데이터셋은 node_encoder=None으로 두면
-    모든 노드에 동일한 학습 가능한 더미 임베딩을 부여해 처리한다."""
+    모든 노드에 동일한 학습 가능한 더미 임베딩을 부여해 처리한다.
+
+    backbone_residual: main 브랜치 stash(WIP on main: 8d35b75)의 개선 중 VN과 무관한 부분만
+    이식 — 각 GCN 레이어(conv+bn+dropout) 주변에 skip connection을 둔다. 같은 stash의
+    vn_residual(centroid tree로 전파된 값을 되먹이는 것)은 VN 전용 기작이라 여긴 없음."""
 
     def __init__(self, cfg, num_tasks, edge_dim, node_encoder=None):
         super().__init__()
@@ -54,6 +58,7 @@ class GCNGraphClassifier(nn.Module):
         self.bns   = nn.ModuleList([nn.BatchNorm1d(emb_dim) for _ in range(num_layers)])
         self.drop_ratio = drop_ratio
         self.num_layer  = num_layers
+        self.backbone_residual = bool(model_cfg.get('backbone_residual', True))
 
         self.pred_head = nn.Linear(emb_dim, num_tasks)
 
@@ -64,9 +69,12 @@ class GCNGraphClassifier(nn.Module):
             h = self.dummy_node_emb(data.x)
 
         for i, (conv, bn) in enumerate(zip(self.convs, self.bns)):
+            h_in = h
             h = bn(conv(h, data.edge_index, data.edge_attr))
             h = F.dropout(F.relu(h) if i < self.num_layer - 1 else h,
                           p=self.drop_ratio, training=self.training)
+            if self.backbone_residual:
+                h = h + h_in
 
         h_graph = global_mean_pool(h, data.batch)
         return self.pred_head(h_graph)
