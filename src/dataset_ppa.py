@@ -15,18 +15,21 @@ def _add_dummy_node_feature(data):
 
 
 @contextlib.contextmanager
-def _auto_decline_dataset_update_prompt():
-    """ogb가 '데이터셋이 갱신됐다'며 input()으로 재다운로드 여부를 물어보는데,
-    nohup 등 stdin이 없는 환경에서는 그 input() 자체가 OSError(Bad file
-    descriptor)로 죽는다. 여기선 무조건 'N'(기존 캐시 유지)으로 자동 응답한다."""
+def _auto_confirm_dataset_prompts():
+    """ogb는 (1) 로컬 캐시 버전이 안 맞으면 업데이트할지, (2) 실제 다운로드(ppa는 2.79GB)를
+    진행할지를 input()으로 물어본다. nohup 등 stdin이 없는 환경에서는 input() 자체가
+    OSError(Bad file descriptor)로 죽고, 'N'으로 자동응답하면 ogb가 download()에서
+    decide_download()==False로 판단해 'Stop downloading.' 후 exit(-1)로 프로세스를
+    통째로 종료시켜버린다(캐시가 없으면 다운로드가 필수이므로). 그래서 비대화형
+    환경에서는 두 프롬프트 모두 'y'로 자동 응답해 정상적으로 받아지게 한다."""
     original_input = builtins.input
 
-    def _auto_no(prompt=''):
+    def _auto_yes(prompt=''):
         print(prompt, end='')
-        print('N  (자동 응답 — 비대화형 환경이라 기존 캐시 데이터셋을 그대로 사용)')
-        return 'N'
+        print('y  (자동 응답 — 비대화형 환경이라 필요한 다운로드/갱신을 그대로 진행)')
+        return 'y'
 
-    builtins.input = _auto_no
+    builtins.input = _auto_yes
     try:
         yield
     finally:
@@ -35,7 +38,7 @@ def _auto_decline_dataset_update_prompt():
 
 def build_loaders(cfg):
     """VN/centroid 전처리를 전혀 거치지 않고 원본 edge_index/edge_attr을 그대로 사용한다."""
-    with _auto_decline_dataset_update_prompt():
+    with _auto_confirm_dataset_prompts():
         dataset = PygGraphPropPredDataset(
             name=cfg['data']['dataset_name'],
             transform=_add_dummy_node_feature,
