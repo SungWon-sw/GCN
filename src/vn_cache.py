@@ -21,7 +21,7 @@ class CachedVNDataset(Dataset):
 
     def __init__(self, dataset):
         self.dataset = dataset
-        fingerprint = hashlib.sha256(b'ppa-vn-cache-v1')
+        fingerprint = hashlib.sha256(b'ppa-vn-cache-v2')
         fingerprint.update(Path(utils_vn_connect.__file__).read_bytes())
         for filename in dataset.processed_paths:
             path = Path(filename).resolve()
@@ -52,7 +52,7 @@ class CachedVNDataset(Dataset):
             result = add_ppa_virtual_nodes(data)
             fields = {
                 key: getattr(result, key)
-                for key in ('vn_edge_index')
+                for key in ('vn_edge_index', 'vn_incidence', 'num_vn')
             }
             path.parent.mkdir(parents=True, exist_ok=True)
             # Publish only complete files, including when multiple workers/runs
