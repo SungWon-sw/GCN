@@ -8,3 +8,6 @@ dataset/
 best_model.pt
 .conda/
 ogbg_ppa/
+plot_seeds.py/
+parse_log.py/
+plot_ppa_comparison.py/
