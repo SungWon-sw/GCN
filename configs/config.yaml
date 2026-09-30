@@ -8,6 +8,17 @@ model:
   num_layers: 3
   num_sublayers: 1
   dropout: 0.5 ######
+  # --- GCN+ 옵션 (기본값 = 기존 동작과 동일) ---
+  edge_attr: true          # 엣지 특징(7-dim)을 메시지에 사용
+  norm: batch              # 백본 정규화: batch | layer | none
+  ffn: false               # 레이어마다 FFN(+정규화, 잔차) 추가
+  ffn_ratio: 2             # FFN 은닉 배수
+  pos_encoding:            # RWSE 위치 인코딩 (노드 임베딩에 더함)
+    enabled: false
+    dim: 16                # 랜덤워크 길이 1..dim
+  backbone_residual: true  # GCN 레이어마다 skip connection (기존 옵션)
+  vn_residual: true        # centroid-tree 블록 잔차 (기존 옵션)
+  # dropout 은 train.drop_ratio (0 이면 off)
 
 # 학습 관련
 train:

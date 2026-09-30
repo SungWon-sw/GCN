@@ -1,20 +1,19 @@
 """
-GCN + Centroid-Tree virtual nodes for ogbg-code2  (bug-fixed version)
+GCN + Centroid-Tree virtual nodes for ogbg-ppa.
 
-Assumptions about the batched `data` object (in addition to the usual
-x, edge_index, edge_attr, node_depth, batch):
+Fields expected on the batched `data` object (produced by
+utils_vn_connect.add_ppa_virtual_nodes, then cached / collated):
 
-    data.vn_edge_index : LongTensor [2, Evn]  edges of the centroid tree
-                                              (indices in [0, num_vn))
-    data.vn_batch      : LongTensor [num_vn]  graph id of every centroid-tree node
-    data.node2vn       : LongTensor [N]       for every real node, the index of
-                                              the centroid-tree node it is attached to
+    data.x             : LongTensor [N]       zeros (ppa has no node features)
+    data.edge_index    : LongTensor [2, E]    real protein-association graph
+    data.edge_attr     : Tensor     [E, 7]    real edge features
+    data.batch         : LongTensor [N]       graph id per real node
+    data.vn_incidence  : LongTensor [2, M]    (real node, virtual node) memberships
+    data.vn_edge_index : LongTensor [2, Evn]  centroid-tree edges over virtual nodes
+    data.num_vn        : LongTensor scalar    #virtual nodes for the graph
 
-If you only have one virtual node per graph (classic OGB VN), pass
-    data.node2vn      = data.batch
-    data.vn_batch     = torch.arange(num_graphs)
-    data.vn_edge_index = torch.empty(2, 0, dtype=torch.long)
-and this module degenerates to the standard GCN-with-virtual-node.
+Each virtual node is a bag of the (reduced) tree decomposition; the virtual
+nodes are wired into the centroid tree of that bag tree.
 """
 
 import torch
@@ -28,29 +27,43 @@ from torch_geometric.utils import scatter
 class GCNConv(MessagePassing):
     """OGB-style GCN layer for the real AST graph (uses edge features)."""
 
-    def __init__(self, emb_dim):
+    def __init__(self, emb_dim, use_edge_attr=True):
         super().__init__(aggr='add')
         self.linear       = nn.Linear(emb_dim, emb_dim)
         self.root_emb     = nn.Embedding(1, emb_dim)
-        self.edge_encoder = nn.Linear(7, emb_dim)
+        # use_edge_attr=false: edge features are ignored (messages use x_j only)
+        self.edge_encoder = nn.Linear(7, emb_dim) if use_edge_attr else None
 
     def forward(self, x, edge_index, edge_attr):
         x        = self.linear(x)
-        edge_emb = self.edge_encoder(edge_attr.float())
+        edge_emb = self.edge_encoder(edge_attr.float()) if self.edge_encoder is not None else None
 
         row, col       = edge_index
-        deg          = degree(row, x.size(0), dtype=x.dtype) + 1
+        deg          = degree(row, x.size(0), dtype=torch.float32) + 1   # bf16 은 256 초과 정수 부정확
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0          # isolated node -> 0, not 1e9
-        norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+        deg_inv_sqrt = deg_inv_sqrt.masked_fill(torch.isinf(deg_inv_sqrt), 0)   # isolated node -> 0, not 1e9
+        norm = (deg_inv_sqrt[row] * deg_inv_sqrt[col]).to(x.dtype)
 
         agg = self.propagate(edge_index, x=x, edge_attr=edge_emb, norm=norm)
-        root = F.relu(x + self.root_emb.weight) / deg.view(-1, 1)
+        root = F.relu(x + self.root_emb.weight) / deg.to(x.dtype).view(-1, 1)
 
         return agg + root
 
     def message(self, x_j, edge_attr, norm):
-        return norm.view(-1, 1) * F.relu(x_j + edge_attr)
+        if edge_attr is not None:
+            x_j = x_j + edge_attr
+        return norm.view(-1, 1) * F.relu(x_j)
+
+
+def make_norm(kind, dim):
+    """Backbone normalization: 'batch' | 'layer' | 'none'."""
+    if kind == 'batch':
+        return nn.BatchNorm1d(dim)
+    if kind == 'layer':
+        return nn.LayerNorm(dim)
+    if kind == 'none':
+        return nn.Identity()
+    raise ValueError(f"model.norm must be 'batch', 'layer' or 'none', got {kind!r}")
 
 
 class GCNConvVN(MessagePassing):
@@ -69,13 +82,13 @@ class GCNConvVN(MessagePassing):
         x = self.linear(x)
 
         row, _       = edge_index
-        deg          = degree(row, x.size(0), dtype=x.dtype)
+        deg          = degree(row, x.size(0), dtype=torch.float32)
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
-        norm = deg_inv_sqrt[edge_index[0]] * deg_inv_sqrt[edge_index[1]]
+        deg_inv_sqrt = deg_inv_sqrt.masked_fill(torch.isinf(deg_inv_sqrt), 0)
+        norm = (deg_inv_sqrt[edge_index[0]] * deg_inv_sqrt[edge_index[1]]).to(x.dtype)
 
         agg = self.propagate(edge_index, x=x, norm=norm)
-        return agg + F.relu(x + self.root_emb.weight) / deg.clamp(min=1).view(-1, 1)
+        return agg + F.relu(x + self.root_emb.weight) / deg.clamp(min=1).to(x.dtype).view(-1, 1)
 
     def message(self, x_j, norm):
         return norm.view(-1, 1) * F.relu(x_j)
@@ -100,11 +113,42 @@ class GCN(nn.Module):
         self.num_sublayers = num_sublayers
         self.drop_ratio    = drop_ratio
         self.max_seq_len   = max_seq_len
+        # residual around each centroid-tree block; alpha scales the propagated
+        # branch. vn_residual=false recovers the plain "replace vn" behaviour.
+        self.vn_residual       = bool(model_cfg.get('vn_residual', True))
+        self.vn_residual_alpha = float(model_cfg.get('vn_residual_alpha', 1.0))
+        # skip connection around each backbone GCN layer (inject+conv+bn+dropout),
+        # wired to the previous layer's output as in the OGB reference GNN.
+        # backbone_residual=false recovers the plain feed-forward stack.
+        self.backbone_residual = bool(model_cfg.get('backbone_residual', True))
+
+        # GCN+ style options (all switchable from config `model:`)
+        norm_kind     = model_cfg.get('norm', 'batch')            # batch | layer | none
+        use_edge_attr = bool(model_cfg.get('edge_attr', True))
+        self.use_ffn  = bool(model_cfg.get('ffn', False))
+        ffn_ratio     = int(model_cfg.get('ffn_ratio', 2))
+        pe_cfg        = model_cfg.get('pos_encoding', {})
+        self.use_pe   = bool(pe_cfg.get('enabled', False))
 
         self.node_encoder = node_encoder
 
-        self.convs = nn.ModuleList([GCNConv(emb_dim) for _ in range(num_layers)])
-        self.bns   = nn.ModuleList([nn.BatchNorm1d(emb_dim) for _ in range(num_layers)])
+        # RWSE (data.pe, [N, pe_dim]) -> emb_dim, added to the node embedding
+        if self.use_pe:
+            self.pe_encoder = nn.Linear(int(pe_cfg.get('dim', 16)), emb_dim)
+
+        self.convs = nn.ModuleList([GCNConv(emb_dim, use_edge_attr) for _ in range(num_layers)])
+        self.bns   = nn.ModuleList([make_norm(norm_kind, emb_dim) for _ in range(num_layers)])
+
+        # per-layer FFN with its own norm and skip connection: h = h + FFN(norm(h))
+        if self.use_ffn:
+            self.ffn_norms = nn.ModuleList([make_norm(norm_kind, emb_dim) for _ in range(num_layers)])
+            self.ffns = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(emb_dim, ffn_ratio * emb_dim), nn.ReLU(),
+                    nn.Dropout(drop_ratio),
+                    nn.Linear(ffn_ratio * emb_dim, emb_dim),
+                ) for _ in range(num_layers)
+            ])
 
         # --- virtual-node / centroid-tree machinery --------------------------
         self.virtualnode_embedding = nn.Embedding(1, emb_dim)
@@ -143,12 +187,15 @@ class GCN(nn.Module):
     def forward(self, data):
         vn_edge_index = data.vn_edge_index
         inc_node, inc_vn       = data.vn_incidence
-        vn_batch = scatter(data.batch[inc_node], inc_vn, dim=0,
-                   dim_size=int(inc_vn.max()) + 1, reduce='max')
-        num_vn        = vn_batch.size(0)
+        # train.to_device 가 미리 계산해 둔 python int 사용 (없으면 .max() 로 폴백 = GPU 동기화)
+        num_vn = getattr(data, 'num_vn_total', None)
+        if num_vn is None:
+            num_vn = int(inc_vn.max()) + 1
         N = data.x.size(0)
 
         h = self.node_encoder(data.x)               # [N, D]
+        if self.use_pe:
+            h = h + self.pe_encoder(data.pe.to(h.dtype))
         memb = scatter(torch.ones(inc_node.numel(), device=h.device),
                    inc_node, dim=0, dim_size=N, reduce='sum').clamp(min=1)
         
@@ -157,12 +204,18 @@ class GCN(nn.Module):
 
 
         for i in range(self.num_layers):
+            h_in = h                         # previous layer output (OGB-ref skip target)
             h = h + scatter(vn[inc_vn], inc_node, dim=0, dim_size=N, reduce='mean')
                                              # inject hub state
             h = self.convs[i](h, data.edge_index, data.edge_attr)
             h = self.bns[i](h)
             h = F.dropout(F.relu(h) if i < self.num_layers - 1 else h,
                           self.drop_ratio, training=self.training)
+            if self.backbone_residual:
+                h = h + h_in                 # skip around inject+conv+bn+dropout
+            if self.use_ffn:
+                h = h + F.dropout(self.ffns[i](self.ffn_norms[i](h)),
+                                  self.drop_ratio, training=self.training)
 
             if i < self.num_layers - 1:
                 # pool real nodes into their hub, refine, diffuse over centroid tree
@@ -172,7 +225,12 @@ class GCN(nn.Module):
                 update = self.mlp_virtualnode[i](pooled + vn)
                 update = F.dropout(update, self.drop_ratio, training=self.training)
                 vn     = vn + update
-                vn     = self._propagate_vn(vn, vn_edge_index, block=i)
+
+                propagated = self._propagate_vn(vn, vn_edge_index, block=i)
+                if self.vn_residual:
+                    vn = vn + self.vn_residual_alpha * propagated
+                else:
+                    vn = propagated
 
         h_graph = global_mean_pool(h, data.batch)
-        return self.graph_pred_linear(h_graph)                # list of [B, num_tasks]
+        return self.graph_pred_linear(h_graph)                # [B, num_classes]
