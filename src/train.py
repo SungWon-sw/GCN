@@ -162,8 +162,10 @@ def build_model_and_optimizer(cfg, num_classes, device):
         node_encoder=PPANodeEncoder(tcfg['emb_dim']),
         num_classes=num_classes,
     ).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=tcfg['lr'], weight_decay=tcfg['weight_decay'],
-                                 fused=(device.type == 'cuda'))
+    # adamw: GCN+ 와 동일한 decoupled weight decay (Adam 의 L2 와 다름). 기본값은 기존 동작(adam).
+    opt_cls = {'adam': torch.optim.Adam, 'adamw': torch.optim.AdamW}[str(tcfg.get('optimizer', 'adam')).lower()]
+    optimizer = opt_cls(model.parameters(), lr=tcfg['lr'], weight_decay=tcfg['weight_decay'],
+                        fused=(device.type == 'cuda'))
     return model, optimizer, nn.CrossEntropyLoss()
 
 

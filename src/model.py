@@ -168,7 +168,13 @@ class GCN(nn.Module):
         self.subbns = nn.ModuleList(
             [nn.BatchNorm1d(emb_dim) for _ in range(n_vn_blocks * num_sublayers)])
 
-        self.graph_pred_linear = nn.Linear(emb_dim, num_classes)
+        # post-MP 헤드 (GCN+ ppa: layers_post_mp=2). 1 이면 기존 선형 헤드와 동일.
+        post_mp = max(int(model_cfg.get('post_mp_layers', 1)), 1)
+        head = []
+        for _ in range(post_mp - 1):
+            head += [nn.Linear(emb_dim, emb_dim), nn.ReLU()]
+        head.append(nn.Linear(emb_dim, num_classes))
+        self.graph_pred_linear = nn.Sequential(*head)
 
     # ----------------------------------------------------------------------
     def _propagate_vn(self, vn, vn_edge_index, block):

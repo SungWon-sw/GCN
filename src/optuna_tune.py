@@ -20,9 +20,12 @@ def parse_args():
     p = argparse.ArgumentParser(description="Optuna hyperparameter search for src/train.py (ogbg-ppa, GCN+centroid-VN)")
     p.add_argument("--config", default="configs/config.yaml")
     p.add_argument("--n-trials", type=int, default=30)
-    p.add_argument("--epochs", type=int, default=10, help="트라이얼당 학습 에폭 수 (전체 재학습과 별개, 짧게 탐색)")
+    p.add_argument("--epochs", type=int, default=30,
+                   help="트라이얼당 학습 에폭 수 (전체 재학습 400 에폭과 별개). cosine 스케줄이 이 길이로 압축되고 "
+                        "warmup 은 epochs//10 으로 비례 축소됨")
     p.add_argument("--timeout", type=int, default=None, help="탐색 전체 제한 시간(초), 기본 무제한")
-    p.add_argument("--study-name", default="ppa_gcn_centroid_vn")
+    # 탐색 공간이 바뀌었으므로 옛 study(v1)와 이름을 분리 (Optuna 는 같은 이름에 분포가 다르면 에러)
+    p.add_argument("--study-name", default="ppa_gcnplus_centroid_vn_v2")
     p.add_argument("--storage", default="sqlite:///optuna_ppa.db", help="중단 후 이어서 탐색하려면 sqlite 파일 유지")
     p.add_argument("--seed", type=int, default=42, help="Optuna 샘플러 시드")
     p.add_argument("--retrain-best", action="store_true",
@@ -53,20 +56,21 @@ def make_objective(base_cfg, cached_dataset, split_idx, num_classes, device, epo
     evaluator = Evaluator(base_cfg['data']['dataset_name'])
 
     def objective(trial):
+        # GCN+ 논문(Sec.4/A.3) 탐색 공간 주변으로 좁힘: lr ∈ [1e-4,1e-3], dropout ∈ [0.05,0.3],
+        # BN/FFN/PE on-off. 고정(config 값 유지): optimizer=adamw, post_mp_layers=2,
+        # edge_attr=True, backbone_residual=True (ppa 엣지 특징/잔차는 구조의 핵심이라 탐색 제외 -> 탐색 차원 축소).
         params = {
-            'lr': trial.suggest_float('lr', 1e-4, 1e-2, log=True),
-            'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
-            'drop_ratio': trial.suggest_float('drop_ratio', 0.0, 0.6),
-            'emb_dim': trial.suggest_categorical('emb_dim', [128, 200, 300, 384]),
-            'num_layers': trial.suggest_int('num_layers', 2, 5),
-            'num_sublayers': trial.suggest_int('num_sublayers', 1, 4),
-            'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64, 128]),
+            'lr': trial.suggest_float('lr', 1e-4, 1e-3, log=True),
+            'weight_decay': trial.suggest_float('weight_decay', 1e-6, 1e-4, log=True),
+            'drop_ratio': trial.suggest_float('drop_ratio', 0.05, 0.3, step=0.05),
+            'emb_dim': trial.suggest_categorical('emb_dim', [256, 384, 512]),
+            'num_layers': trial.suggest_int('num_layers', 3, 6),
+            'num_sublayers': trial.suggest_int('num_sublayers', 1, 2),
+            'batch_size': trial.suggest_categorical('batch_size', [32, 64]),
             # --- GCN+ 옵션 ---
-            'edge_attr': trial.suggest_categorical('edge_attr', [True, False]),
-            'norm': trial.suggest_categorical('norm', ['batch', 'layer', 'none']),
+            'norm': trial.suggest_categorical('norm', ['batch', 'layer']),
             'ffn': trial.suggest_categorical('ffn', [True, False]),
             'pos_encoding': trial.suggest_categorical('pos_encoding', [True, False]),
-            'backbone_residual': trial.suggest_categorical('backbone_residual', [True, False]),
         }
         if params['ffn']:
             params['ffn_ratio'] = trial.suggest_categorical('ffn_ratio', [1, 2, 4])
@@ -74,6 +78,7 @@ def make_objective(base_cfg, cached_dataset, split_idx, num_classes, device, epo
             params['pe_dim'] = trial.suggest_categorical('pe_dim', [8, 16, 32])
         cfg = copy.deepcopy(base_cfg)
         apply_params(cfg, params)
+        cfg['train']['warmup_epochs'] = max(1, epochs // 10)   # 400ep/warmup10 비율(2.5%)보다 짧은 탐색용으로 10% 유지
 
         train_loader, val_loader, _ = make_loaders(
             apply_pe(cached_dataset, cfg), split_idx,
@@ -129,7 +134,7 @@ def main():
         load_if_exists=True,
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=args.seed),
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=3),
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=8),
     )
     study.optimize(objective, n_trials=args.n_trials, timeout=args.timeout)
 
